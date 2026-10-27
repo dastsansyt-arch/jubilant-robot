@@ -1,0 +1,26 @@
+{
+  "id": "/",
+  "name": "Life Simulator EX: Offline Mobile APK Edition",
+  "short_name": "LifeSimEX",
+  "description": "Автономный симулятор жизни с 0 лет: 74+ города, Топ-10 ВУЗов стран ЕС и Украины, 640 профессий, автопарк, криминал, казино, спорт, отношения и встроенный ИИ без интернета.",
+  "theme_color": "#070A0F",
+  "background_color": "#070A0F",
+  "display": "standalone",
+  "orientation": "portrait",
+  "start_url": "/",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
