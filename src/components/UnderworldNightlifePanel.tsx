@@ -25,8 +25,6 @@ import {
   Coins,
   Heart,
   Sparkles,
-  Skull,
-  Award,
   Lock,
 } from 'lucide-react';
 
@@ -66,15 +64,16 @@ export const UnderworldNightlifePanel: React.FC<UnderworldNightlifePanelProps> =
   const activePartner = ROMANCE_PARTNERS_CATALOG.find((p) => p.id === player.activePartnerId);
 
   return (
-    <div className="space-y-3">
-      {/* Sub-navigation pills */}
-      <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 bg-[#0f1620] p-1.5 rounded-xl border border-[#1e2938]">
+    <div className="space-y-3.5 text-[#2C2523]">
+      {/* Sub-navigation bar in Warm Cream UI */}
+      <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 bg-[#F4EFE6] p-1.5 rounded-xl border border-[#DCD3C2]">
         <button
+          type="button"
           onClick={() => setSubTab('crime')}
-          className={`py-2 px-2 rounded-lg text-[11px] font-semibold flex flex-col items-center justify-center gap-0.5 transition ${
+          className={`py-2 px-2 rounded-lg text-[11px] font-semibold flex flex-col items-center justify-center gap-0.5 transition cursor-pointer ${
             subTab === 'crime'
-              ? 'bg-rose-600 text-white'
-              : 'text-slate-400 hover:text-slate-200 bg-[#151e2b]'
+              ? 'bg-[#B84A39] text-[#FAF7F2] font-bold shadow-2xs'
+              : 'text-[#6E655F] hover:text-[#2C2523] bg-[#FFFFFF] border border-[#DCD3C2]'
           }`}
         >
           <div className="flex items-center gap-1">
@@ -82,19 +81,21 @@ export const UnderworldNightlifePanel: React.FC<UnderworldNightlifePanelProps> =
             <span>Криминал</span>
           </div>
           {player.age < 16 ? (
-            <span className="text-[9px] text-amber-400 flex items-center gap-0.5">
+            <span className="text-[9px] text-[#C87A3E] flex items-center gap-0.5">
               <Lock className="w-2 h-2" /> с 16 лет
             </span>
           ) : player.age < 18 ? (
-            <span className="text-[9px] text-sky-400">16+ уличное</span>
+            <span className="text-[9px] text-[#3B5B76]">16+ уличное</span>
           ) : null}
         </button>
+
         <button
+          type="button"
           onClick={() => setSubTab('casino')}
-          className={`py-2 px-2 rounded-lg text-[11px] font-semibold flex flex-col items-center justify-center gap-0.5 transition ${
+          className={`py-2 px-2 rounded-lg text-[11px] font-semibold flex flex-col items-center justify-center gap-0.5 transition cursor-pointer ${
             subTab === 'casino'
-              ? 'bg-amber-500 text-slate-950'
-              : 'text-slate-400 hover:text-slate-200 bg-[#151e2b]'
+              ? 'bg-[#C87A3E] text-[#FAF7F2] font-bold shadow-2xs'
+              : 'text-[#6E655F] hover:text-[#2C2523] bg-[#FFFFFF] border border-[#DCD3C2]'
           }`}
         >
           <div className="flex items-center gap-1">
@@ -102,17 +103,19 @@ export const UnderworldNightlifePanel: React.FC<UnderworldNightlifePanelProps> =
             <span>Казино 777</span>
           </div>
           {player.age < 18 && (
-            <span className="text-[9px] text-amber-400 flex items-center gap-0.5">
+            <span className="text-[9px] text-[#C87A3E] flex items-center gap-0.5">
               <Lock className="w-2 h-2" /> с 18 лет
             </span>
           )}
         </button>
+
         <button
+          type="button"
           onClick={() => setSubTab('steroids')}
-          className={`py-2 px-2 rounded-lg text-[11px] font-semibold flex flex-col items-center justify-center gap-0.5 transition ${
+          className={`py-2 px-2 rounded-lg text-[11px] font-semibold flex flex-col items-center justify-center gap-0.5 transition cursor-pointer ${
             subTab === 'steroids'
-              ? 'bg-emerald-500 text-slate-950'
-              : 'text-slate-400 hover:text-slate-200 bg-[#151e2b]'
+              ? 'bg-[#2E6F5E] text-[#FAF7F2] font-bold shadow-2xs'
+              : 'text-[#6E655F] hover:text-[#2C2523] bg-[#FFFFFF] border border-[#DCD3C2]'
           }`}
         >
           <div className="flex items-center gap-1">
@@ -120,17 +123,19 @@ export const UnderworldNightlifePanel: React.FC<UnderworldNightlifePanelProps> =
             <span>Стероиды</span>
           </div>
           {player.age < 18 && (
-            <span className="text-[9px] text-amber-400 flex items-center gap-0.5">
+            <span className="text-[9px] text-[#C87A3E] flex items-center gap-0.5">
               <Lock className="w-2 h-2" /> с 18 лет
             </span>
           )}
         </button>
+
         <button
+          type="button"
           onClick={() => setSubTab('habits')}
-          className={`py-2 px-2 rounded-lg text-[11px] font-semibold flex flex-col items-center justify-center gap-0.5 transition ${
+          className={`py-2 px-2 rounded-lg text-[11px] font-semibold flex flex-col items-center justify-center gap-0.5 transition cursor-pointer ${
             subTab === 'habits'
-              ? 'bg-orange-500 text-slate-950'
-              : 'text-slate-400 hover:text-slate-200 bg-[#151e2b]'
+              ? 'bg-[#C87A3E] text-[#FAF7F2] font-bold shadow-2xs'
+              : 'text-[#6E655F] hover:text-[#2C2523] bg-[#FFFFFF] border border-[#DCD3C2]'
           }`}
         >
           <div className="flex items-center gap-1">
@@ -138,17 +143,19 @@ export const UnderworldNightlifePanel: React.FC<UnderworldNightlifePanelProps> =
             <span>Привычки</span>
           </div>
           {player.age < 14 && (
-            <span className="text-[9px] text-amber-400 flex items-center gap-0.5">
+            <span className="text-[9px] text-[#C87A3E] flex items-center gap-0.5">
               <Lock className="w-2 h-2" /> с 14 лет
             </span>
           )}
         </button>
+
         <button
+          type="button"
           onClick={() => setSubTab('romance')}
-          className={`py-2 px-2 rounded-lg text-[11px] font-semibold flex flex-col items-center justify-center gap-0.5 transition ${
+          className={`py-2 px-2 rounded-lg text-[11px] font-semibold flex flex-col items-center justify-center gap-0.5 transition cursor-pointer ${
             subTab === 'romance'
-              ? 'bg-pink-500 text-white'
-              : 'text-slate-400 hover:text-slate-200 bg-[#151e2b]'
+              ? 'bg-[#B84A39] text-[#FAF7F2] font-bold shadow-2xs'
+              : 'text-[#6E655F] hover:text-[#2C2523] bg-[#FFFFFF] border border-[#DCD3C2]'
           }`}
         >
           <div className="flex items-center gap-1">
@@ -156,19 +163,21 @@ export const UnderworldNightlifePanel: React.FC<UnderworldNightlifePanelProps> =
             <span>Любовь</span>
           </div>
           {player.age < 12 ? (
-            <span className="text-[9px] text-amber-400 flex items-center gap-0.5">
+            <span className="text-[9px] text-[#C87A3E] flex items-center gap-0.5">
               <Lock className="w-2 h-2" /> с 12 лет
             </span>
           ) : player.age < 18 ? (
-            <span className="text-[9px] text-pink-300">12+ подростк.</span>
+            <span className="text-[9px] text-[#B84A39]">12+ подростк.</span>
           ) : null}
         </button>
+
         <button
+          type="button"
           onClick={() => setSubTab('nightlife')}
-          className={`py-2 px-2 rounded-lg text-[11px] font-semibold flex flex-col items-center justify-center gap-0.5 transition ${
+          className={`py-2 px-2 rounded-lg text-[11px] font-semibold flex flex-col items-center justify-center gap-0.5 transition cursor-pointer ${
             subTab === 'nightlife'
-              ? 'bg-purple-500 text-white'
-              : 'text-slate-400 hover:text-slate-200 bg-[#151e2b]'
+              ? 'bg-[#3B5B76] text-[#FAF7F2] font-bold shadow-2xs'
+              : 'text-[#6E655F] hover:text-[#2C2523] bg-[#FFFFFF] border border-[#DCD3C2]'
           }`}
         >
           <div className="flex items-center gap-1">
@@ -176,7 +185,7 @@ export const UnderworldNightlifePanel: React.FC<UnderworldNightlifePanelProps> =
             <span>Эскорт / Клуб</span>
           </div>
           {player.age < 18 && (
-            <span className="text-[9px] text-amber-400 flex items-center gap-0.5">
+            <span className="text-[9px] text-[#C87A3E] flex items-center gap-0.5">
               <Lock className="w-2 h-2" /> с 18 лет
             </span>
           )}
@@ -187,44 +196,44 @@ export const UnderworldNightlifePanel: React.FC<UnderworldNightlifePanelProps> =
       {subTab === 'crime' && (
         <div className="space-y-3">
           {player.age < 16 ? (
-            <div className="rounded-xl bg-amber-950/40 border border-amber-500/40 p-4 text-amber-200 flex items-center gap-3">
-              <Lock className="w-5 h-5 text-amber-400 shrink-0" />
+            <div className="rounded-xl bg-[#C87A3E]/12 border border-[#C87A3E]/40 p-4 text-[#2C2523] flex items-center gap-3">
+              <Lock className="w-5 h-5 text-[#C87A3E] shrink-0" />
               <div>
-                <div className="text-sm font-bold">Криминальный мир заблокирован до 16 лет</div>
-                <div className="text-xs text-amber-300/80 mt-0.5">
+                <div className="text-sm font-bold text-[#2C2523]">Криминальный мир заблокирован до 16 лет</div>
+                <div className="text-xs text-[#6E655F] mt-0.5">
                   Уголовные преступления и нелегальные операции доступны только с 16 лет. До этого возраста ведите законопослушную жизнь.
                 </div>
               </div>
             </div>
           ) : player.age < 18 ? (
-            <div className="rounded-xl bg-blue-950/40 border border-blue-500/40 p-3 text-blue-200 flex items-center gap-2.5 text-xs">
-              <ShieldAlert className="w-4 h-4 text-blue-400 shrink-0" />
+            <div className="rounded-xl bg-[#3B5B76]/12 border border-[#3B5B76]/40 p-3 text-[#2C2523] flex items-center gap-2.5 text-xs">
+              <ShieldAlert className="w-4 h-4 text-[#3B5B76] shrink-0" />
               <div>
                 <strong>Подростковый возраст (16–17 лет):</strong> Доступны мелкие уличные дела. Тяжёлые ограбления и разборки доступны с 18 лет!
               </div>
             </div>
           ) : null}
 
-          <div className="rounded-xl bg-[#101722] border border-rose-500/30 p-3 flex flex-wrap items-center justify-between gap-2">
+          <div className="rounded-xl bg-[#F4EFE6] border border-[#DCD3C2] p-3 flex flex-wrap items-center justify-between gap-2">
             <div>
-              <div className="text-xs font-bold text-rose-300 uppercase tracking-wider">
+              <div className="text-xs font-bold text-[#B84A39] uppercase tracking-wider">
                 Криминальный синдикат, Разборки и Коррупция
               </div>
-              <div className="text-[11px] text-slate-400">
+              <div className="text-[11px] text-[#6E655F]">
                 Розыск полиции:{' '}
-                <span className="text-amber-400 font-mono font-bold">
+                <span className="text-[#C87A3E] font-mono font-bold">
                   {player.wantedLevel > 0 ? '★'.repeat(player.wantedLevel) : '0 ★ (Чист)'}
                 </span>{' '}
-                · Ограблений: <span className="text-emerald-300 font-mono">{player.heistsCompleted}</span> ·
-                Взяток взято: <span className="text-amber-300 font-mono">{player.bribesTakenCount}</span>
+                · Ограблений: <span className="text-[#2E6F5E] font-mono font-bold">{player.heistsCompleted}</span> ·
+                Взяток взято: <span className="text-[#C87A3E] font-mono font-bold">{player.bribesTakenCount}</span>
               </div>
             </div>
-            <div className="text-[11px] font-mono text-slate-300 bg-[#162030] px-2.5 py-1 rounded-lg">
+            <div className="text-[11px] font-mono text-[#2C2523] bg-[#FFFFFF] border border-[#DCD3C2] px-2.5 py-1 rounded-lg">
               Сила: {player.skills.strength} · Интеллект: {player.skills.intellect}
             </div>
           </div>
 
-          <div className="text-xs font-bold text-slate-200 uppercase tracking-wider px-1">
+          <div className="text-xs font-bold text-[#2C2523] uppercase tracking-wider px-1">
             Бандитские разборки, Угоны и Ограбления
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
@@ -235,36 +244,37 @@ export const UnderworldNightlifePanel: React.FC<UnderworldNightlifePanelProps> =
               return (
                 <div
                   key={crime.id}
-                  className="rounded-xl bg-[#101620] border border-[#1e2938] p-3 flex flex-col justify-between gap-2"
+                  className="rounded-xl bg-[#FFFFFF] border border-[#DCD3C2] p-3 flex flex-col justify-between gap-2 shadow-2xs"
                 >
                   <div>
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-bold text-slate-100">{crime.name}</span>
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-rose-500/20 text-rose-300">
+                      <span className="text-xs font-bold text-[#2C2523]">{crime.name}</span>
+                      <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-[#B84A39]/12 text-[#B84A39]">
                         Шанс ~{crime.baseSuccessChance}%
                       </span>
                     </div>
-                    <p className="text-[11px] text-slate-400 mt-1">{crime.description}</p>
+                    <p className="text-[11px] text-[#6E655F] mt-1">{crime.description}</p>
                     <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] font-mono">
-                      <span className="px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300">
+                      <span className="px-1.5 py-0.5 rounded bg-[#2E6F5E]/12 text-[#2E6F5E] font-semibold">
                         Куш: {formatMoney(crime.minPayout, player.currency)} –{' '}
                         {formatMoney(crime.maxPayout, player.currency)}
                       </span>
-                      <span className="px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300">
+                      <span className="px-1.5 py-0.5 rounded bg-[#C87A3E]/15 text-[#B56527] font-semibold">
                         +{crime.wantedGain}★ розыск
                       </span>
-                      <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">
+                      <span className="px-1.5 py-0.5 rounded bg-[#F4EFE6] text-[#6E655F] border border-[#DCD3C2]">
                         Нужна Сила {crime.requiredStrength} / Инт {crime.requiredIntellect}
                       </span>
                     </div>
                   </div>
                   <button
+                    type="button"
                     disabled={isLocked}
                     onClick={() => onExecuteCrime(crime)}
                     className={`w-full py-2 rounded-lg text-xs font-bold transition ${
                       isLocked
-                        ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
-                        : 'bg-rose-600 hover:bg-rose-500 text-white cursor-pointer'
+                        ? 'bg-[#EAE3D5] text-[#9C9289] cursor-not-allowed'
+                        : 'bg-[#B84A39] hover:bg-[#9E3D2E] text-[#FAF7F2] cursor-pointer'
                     }`}
                   >
                     {isLocked
@@ -278,7 +288,7 @@ export const UnderworldNightlifePanel: React.FC<UnderworldNightlifePanelProps> =
             })}
           </div>
 
-          <div className="text-xs font-bold text-amber-300 uppercase tracking-wider px-1 pt-2">
+          <div className="text-xs font-bold text-[#C87A3E] uppercase tracking-wider px-1 pt-2">
             Взятки и Откаты (Дать взятку полиции/судье или Взять откат на работе)
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
@@ -288,16 +298,16 @@ export const UnderworldNightlifePanel: React.FC<UnderworldNightlifePanelProps> =
               return (
                 <div
                   key={bribe.id}
-                  className="rounded-xl bg-[#101620] border border-[#1e2938] p-3 flex flex-col justify-between gap-2"
+                  className="rounded-xl bg-[#FFFFFF] border border-[#DCD3C2] p-3 flex flex-col justify-between gap-2 shadow-2xs"
                 >
                   <div>
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-bold text-slate-100">{bribe.name}</span>
+                      <span className="text-xs font-bold text-[#2C2523]">{bribe.name}</span>
                       <span
-                        className={`text-[10px] font-mono px-2 py-0.5 rounded ${
+                        className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded ${
                           isGive
-                            ? 'bg-sky-500/20 text-sky-300'
-                            : 'bg-emerald-500/20 text-emerald-300'
+                            ? 'bg-[#3B5B76]/15 text-[#3B5B76]'
+                            : 'bg-[#2E6F5E]/15 text-[#2E6F5E]'
                         }`}
                       >
                         {isGive
@@ -305,17 +315,18 @@ export const UnderworldNightlifePanel: React.FC<UnderworldNightlifePanelProps> =
                           : `+${formatMoney(bribe.costOrReward, player.currency)}`}
                       </span>
                     </div>
-                    <p className="text-[11px] text-slate-400 mt-1">{bribe.description}</p>
+                    <p className="text-[11px] text-[#6E655F] mt-1">{bribe.description}</p>
                   </div>
                   <button
+                    type="button"
                     disabled={isLocked}
                     onClick={() => onExecuteBribe(bribe)}
                     className={`w-full py-2 rounded-lg text-xs font-bold transition ${
                       isLocked
-                        ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                        ? 'bg-[#EAE3D5] text-[#9C9289] cursor-not-allowed'
                         : isGive
-                        ? 'bg-sky-600 hover:bg-sky-500 text-white cursor-pointer'
-                        : 'bg-amber-500 hover:bg-amber-400 text-slate-950 cursor-pointer'
+                        ? 'bg-[#3B5B76] hover:bg-[#2F495E] text-[#FAF7F2] cursor-pointer'
+                        : 'bg-[#C87A3E] hover:bg-[#B56527] text-[#FAF7F2] cursor-pointer'
                     }`}
                   >
                     {isLocked
@@ -335,28 +346,28 @@ export const UnderworldNightlifePanel: React.FC<UnderworldNightlifePanelProps> =
       {subTab === 'casino' && (
         <div className="space-y-3">
           {player.age < 18 && (
-            <div className="rounded-xl bg-amber-950/40 border border-amber-500/40 p-4 text-amber-200 flex items-center gap-3">
-              <Lock className="w-5 h-5 text-amber-400 shrink-0" />
+            <div className="rounded-xl bg-[#C87A3E]/12 border border-[#C87A3E]/40 p-4 text-[#2C2523] flex items-center gap-3">
+              <Lock className="w-5 h-5 text-[#C87A3E] shrink-0" />
               <div>
                 <div className="text-sm font-bold">Казино 777 строго с 18 лет</div>
-                <div className="text-xs text-amber-300/80 mt-0.5">
+                <div className="text-xs text-[#6E655F] mt-0.5">
                   Азартные игры на деньги лицам до 18 лет запрещены законом. Доступ откроется при наступлении совершеннолетия.
                 </div>
               </div>
             </div>
           )}
 
-          <div className="rounded-xl bg-gradient-to-r from-[#19120a] via-[#1f1710] to-[#121824] border border-amber-500/35 p-3.5">
+          <div className="rounded-xl bg-[#F4EFE6] border border-[#DCD3C2] p-3.5">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <h3 className="text-sm font-bold text-amber-300">
-                  Гранд-Казино «Royal Neon 777» (г. {player.city.name})
+                <h3 className="text-sm font-bold text-[#C87A3E]">
+                  Гранд-Казино «Royal 777» (г. {player.city.name})
                 </h3>
-                <p className="text-[11px] text-slate-400">
+                <p className="text-[11px] text-[#6E655F]">
                   Чистый баланс в казино за жизнь:{' '}
                   <span
                     className={`font-mono font-bold ${
-                      player.casinoNetProfit >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                      player.casinoNetProfit >= 0 ? 'text-[#2E6F5E]' : 'text-[#B84A39]'
                     }`}
                   >
                     {formatMoney(player.casinoNetProfit, player.currency)}
@@ -367,11 +378,12 @@ export const UnderworldNightlifePanel: React.FC<UnderworldNightlifePanelProps> =
                 {[100, 500, 2000, 10000, 50000].map((amt) => (
                   <button
                     key={amt}
+                    type="button"
                     onClick={() => setBetAmount(amt)}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold transition ${
+                    className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold transition cursor-pointer ${
                       betAmount === amt
-                        ? 'bg-amber-400 text-slate-950'
-                        : 'bg-[#1a2230] text-slate-300 hover:bg-[#232e40]'
+                        ? 'bg-[#C87A3E] text-[#FAF7F2]'
+                        : 'bg-[#FFFFFF] text-[#2C2523] border border-[#DCD3C2] hover:bg-[#EFE8DC]'
                     }`}
                   >
                     {formatMoney(amt, player.currency)}
@@ -416,21 +428,22 @@ export const UnderworldNightlifePanel: React.FC<UnderworldNightlifePanelProps> =
             ].map((g) => (
               <div
                 key={g.id}
-                className="rounded-xl bg-[#101620] border border-[#1e2938] p-3 flex flex-col justify-between gap-2"
+                className="rounded-xl bg-[#FFFFFF] border border-[#DCD3C2] p-3 flex flex-col justify-between gap-2 shadow-2xs"
               >
                 <div>
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-bold text-slate-100">{g.title}</span>
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/20 text-amber-300">
+                    <span className="text-xs font-bold text-[#2C2523]">{g.title}</span>
+                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-[#C87A3E]/15 text-[#B56527]">
                       {g.badge}
                     </span>
                   </div>
-                  <p className="text-[11px] text-slate-400 mt-1">{g.desc}</p>
+                  <p className="text-[11px] text-[#6E655F] mt-1">{g.desc}</p>
                 </div>
                 <button
+                  type="button"
                   disabled={player.age < 18 || player.money < betAmount}
                   onClick={() => onPlayCasino(g.id, betAmount)}
-                  className="w-full py-2 rounded-lg bg-amber-500 hover:bg-amber-400 disabled:bg-slate-800 disabled:text-slate-500 text-slate-950 text-xs font-bold transition cursor-pointer disabled:cursor-not-allowed"
+                  className="w-full py-2 rounded-lg bg-[#C87A3E] hover:bg-[#B56527] disabled:bg-[#EAE3D5] disabled:text-[#9C9289] text-[#FAF7F2] text-xs font-bold transition cursor-pointer disabled:cursor-not-allowed"
                 >
                   {player.age < 18
                     ? '🔒 с 18 лет'
@@ -446,27 +459,27 @@ export const UnderworldNightlifePanel: React.FC<UnderworldNightlifePanelProps> =
       {subTab === 'steroids' && (
         <div className="space-y-3">
           {player.age < 18 && (
-            <div className="rounded-xl bg-amber-950/40 border border-amber-500/40 p-4 text-amber-200 flex items-center gap-3">
-              <Lock className="w-5 h-5 text-amber-400 shrink-0" />
+            <div className="rounded-xl bg-[#C87A3E]/12 border border-[#C87A3E]/40 p-4 text-[#2C2523] flex items-center gap-3">
+              <Lock className="w-5 h-5 text-[#C87A3E] shrink-0" />
               <div>
                 <div className="text-sm font-bold">Фармакология заблокирована до 18 лет</div>
-                <div className="text-xs text-amber-300/80 mt-0.5">
+                <div className="text-xs text-[#6E655F] mt-0.5">
                   Тяжёлые анаболические препараты разрушают подростковую гормональную систему. Доступны только совершеннолетним.
                 </div>
               </div>
             </div>
           )}
 
-          <div className="rounded-xl bg-[#101722] border border-emerald-500/30 p-3 flex flex-wrap items-center justify-between gap-2">
+          <div className="rounded-xl bg-[#F4EFE6] border border-[#DCD3C2] p-3 flex flex-wrap items-center justify-between gap-2">
             <div>
-              <div className="text-xs font-bold text-emerald-300 uppercase">
+              <div className="text-xs font-bold text-[#2E6F5E] uppercase">
                 Спортивная фармакология, Стероиды и ПКТ
               </div>
-              <div className="text-[11px] text-slate-400">
-                Пройдено курсов: <span className="text-emerald-300 font-mono">{player.steroidCyclesUsed}</span> ·
-                Сила: <span className="text-amber-300 font-mono">{player.skills.strength}/100</span> ·
-                Мышечная масса: <span className="text-amber-300 font-mono">{player.skills.muscleMass}/100</span> ·
-                Вес: <span className="text-sky-300 font-mono">{player.weightKg} кг</span>
+              <div className="text-[11px] text-[#6E655F]">
+                Пройдено курсов: <span className="text-[#2E6F5E] font-mono font-bold">{player.steroidCyclesUsed}</span> ·
+                Сила: <span className="text-[#C87A3E] font-mono font-bold">{player.skills.strength}/100</span> ·
+                Мышечная масса: <span className="text-[#C87A3E] font-mono font-bold">{player.skills.muscleMass}/100</span> ·
+                Вес: <span className="text-[#3B5B76] font-mono font-bold">{player.weightKg} кг</span>
               </div>
             </div>
           </div>
@@ -475,32 +488,32 @@ export const UnderworldNightlifePanel: React.FC<UnderworldNightlifePanelProps> =
             {STEROID_CYCLES_CATALOG.map((cycle) => (
               <div
                 key={cycle.id}
-                className="rounded-xl bg-[#101620] border border-[#1e2938] p-3 flex flex-col justify-between gap-2"
+                className="rounded-xl bg-[#FFFFFF] border border-[#DCD3C2] p-3 flex flex-col justify-between gap-2 shadow-2xs"
               >
                 <div>
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-bold text-slate-100">{cycle.name}</span>
-                    <span className="text-xs font-mono font-bold text-emerald-400">
+                    <span className="text-xs font-bold text-[#2C2523]">{cycle.name}</span>
+                    <span className="text-xs font-mono font-bold text-[#2E6F5E]">
                       {formatMoney(cycle.price, player.currency)}
                     </span>
                   </div>
-                  <p className="text-[11px] text-slate-400 mt-1">{cycle.description}</p>
+                  <p className="text-[11px] text-[#6E655F] mt-1">{cycle.description}</p>
                   <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] font-mono">
                     {cycle.strengthGain > 0 && (
-                      <span className="px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300">
+                      <span className="px-1.5 py-0.5 rounded bg-[#2E6F5E]/12 text-[#2E6F5E] font-semibold">
                         +{cycle.strengthGain} Сила
                       </span>
                     )}
                     {cycle.muscleGain !== 0 && (
-                      <span className="px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300">
+                      <span className="px-1.5 py-0.5 rounded bg-[#C87A3E]/15 text-[#B56527] font-semibold">
                         {cycle.muscleGain > 0 ? `+${cycle.muscleGain}` : cycle.muscleGain} Мышцы
                       </span>
                     )}
                     <span
-                      className={`px-1.5 py-0.5 rounded ${
+                      className={`px-1.5 py-0.5 rounded font-semibold ${
                         cycle.healthDelta >= 0
-                          ? 'bg-sky-500/15 text-sky-300'
-                          : 'bg-rose-500/15 text-rose-300'
+                          ? 'bg-[#3B5B76]/15 text-[#3B5B76]'
+                          : 'bg-[#B84A39]/15 text-[#B84A39]'
                       }`}
                     >
                       Здоровье {cycle.healthDelta >= 0 ? `+${cycle.healthDelta}` : cycle.healthDelta}
@@ -508,14 +521,15 @@ export const UnderworldNightlifePanel: React.FC<UnderworldNightlifePanelProps> =
                   </div>
                 </div>
                 <button
+                  type="button"
                   disabled={player.age < 18 || player.money < cycle.price}
                   onClick={() => onUseSteroid(cycle)}
                   className={`w-full py-2 rounded-lg text-xs font-bold transition ${
-                    player.age < 18
-                      ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                    player.age < 18 || player.money < cycle.price
+                      ? 'bg-[#EAE3D5] text-[#9C9289] cursor-not-allowed'
                       : cycle.category === 'pct'
-                      ? 'bg-sky-500 hover:bg-sky-400 text-slate-950 cursor-pointer'
-                      : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 cursor-pointer'
+                      ? 'bg-[#3B5B76] hover:bg-[#2F495E] text-[#FAF7F2] cursor-pointer'
+                      : 'bg-[#2E6F5E] hover:bg-[#24584A] text-[#FAF7F2] cursor-pointer'
                   }`}
                 >
                   {player.age < 18
@@ -533,40 +547,54 @@ export const UnderworldNightlifePanel: React.FC<UnderworldNightlifePanelProps> =
       {/* 4. BAD HABITS & PEER PRESSURE */}
       {subTab === 'habits' && (
         <div className="space-y-3">
-          <div className="rounded-xl bg-[#101722] border border-orange-500/30 p-3 space-y-2">
+          {player.age < 14 && (
+            <div className="rounded-xl bg-[#C87A3E]/12 border border-[#C87A3E]/40 p-4 text-[#2C2523] flex items-center gap-3">
+              <Lock className="w-5 h-5 text-[#C87A3E] shrink-0" />
+              <div>
+                <div className="text-sm font-bold">Вредные привычки и тусовки — с 14 лет</div>
+                <div className="text-xs text-[#6E655F] mt-0.5">
+                  Подростковые компании и вызовы со сверстниками открываются с 14 лет.
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="rounded-xl bg-[#F4EFE6] border border-[#DCD3C2] p-3 space-y-2">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <div className="text-xs font-bold text-orange-300 uppercase">
+                <div className="text-xs font-bold text-[#C87A3E] uppercase">
                   Вредные привычки, Вписки с друзьями и Реабилитация
                 </div>
-                <div className="text-[11px] text-slate-400">
+                <div className="text-[11px] text-[#6E655F]">
                   Высокая зависимость постепенно отнимает здоровье каждый ход.
                 </div>
               </div>
               <button
+                type="button"
+                disabled={player.age < 14}
                 onClick={onTriggerPeerEvent}
-                className="px-3 py-1.5 rounded-lg bg-orange-500 hover:bg-orange-400 text-slate-950 text-xs font-bold transition"
+                className="px-3 py-1.5 rounded-lg bg-[#C87A3E] hover:bg-[#B56527] disabled:bg-[#EAE3D5] disabled:text-[#9C9289] disabled:cursor-not-allowed text-[#FAF7F2] text-xs font-bold transition cursor-pointer"
               >
-                Событие с компанией друзей
+                {player.age < 14 ? '🔒 с 14 лет' : 'Событие с компанией друзей'}
               </button>
             </div>
 
             <div className="grid grid-cols-3 gap-2 pt-1">
-              <div className="p-2 rounded-lg bg-[#16202e]">
-                <div className="text-[10px] text-slate-400">Курение / Никотин</div>
-                <div className="text-sm font-mono font-bold text-amber-300">
+              <div className="p-2 rounded-lg bg-[#FFFFFF] border border-[#DCD3C2]">
+                <div className="text-[10px] text-[#6E655F]">Курение / Никотин</div>
+                <div className="text-sm font-mono font-bold text-[#C87A3E]">
                   {player.habits.smoking}%
                 </div>
               </div>
-              <div className="p-2 rounded-lg bg-[#16202e]">
-                <div className="text-[10px] text-slate-400">Алкоголь</div>
-                <div className="text-sm font-mono font-bold text-orange-300">
+              <div className="p-2 rounded-lg bg-[#FFFFFF] border border-[#DCD3C2]">
+                <div className="text-[10px] text-[#6E655F]">Алкоголь</div>
+                <div className="text-sm font-mono font-bold text-[#B56527]">
                   {player.habits.alcohol}%
                 </div>
               </div>
-              <div className="p-2 rounded-lg bg-[#16202e]">
-                <div className="text-[10px] text-slate-400">Запрещённые вещества</div>
-                <div className="text-sm font-mono font-bold text-rose-400">
+              <div className="p-2 rounded-lg bg-[#FFFFFF] border border-[#DCD3C2]">
+                <div className="text-[10px] text-[#6E655F]">Запрещённые вещества</div>
+                <div className="text-sm font-mono font-bold text-[#B84A39]">
                   {player.habits.drugs}%
                 </div>
               </div>
@@ -577,26 +605,34 @@ export const UnderworldNightlifePanel: React.FC<UnderworldNightlifePanelProps> =
             {HABIT_ACTIONS_CATALOG.map((item) => (
               <div
                 key={item.id}
-                className="rounded-xl bg-[#101620] border border-[#1e2938] p-3 flex flex-col justify-between gap-2"
+                className="rounded-xl bg-[#FFFFFF] border border-[#DCD3C2] p-3 flex flex-col justify-between gap-2 shadow-2xs"
               >
                 <div>
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-bold text-slate-100">{item.name}</span>
-                    <span className="text-xs font-mono text-amber-300">
+                    <span className="text-xs font-bold text-[#2C2523]">{item.name}</span>
+                    <span className="text-xs font-mono font-bold text-[#C87A3E]">
                       {formatMoney(item.price, player.currency)}
                     </span>
                   </div>
-                  <p className="text-[11px] text-slate-400 mt-1">{item.description}</p>
+                  <p className="text-[11px] text-[#6E655F] mt-1">{item.description}</p>
                 </div>
                 <button
+                  type="button"
+                  disabled={player.age < 14 || player.money < item.price}
                   onClick={() => onPerformHabit(item)}
                   className={`w-full py-2 rounded-lg text-xs font-bold transition ${
-                    item.habitType === 'rehab'
-                      ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950'
-                      : 'bg-orange-500/90 hover:bg-orange-400 text-slate-950'
+                    player.age < 14 || player.money < item.price
+                      ? 'bg-[#EAE3D5] text-[#9C9289] cursor-not-allowed'
+                      : item.habitType === 'rehab'
+                      ? 'bg-[#2E6F5E] hover:bg-[#24584A] text-[#FAF7F2] cursor-pointer'
+                      : 'bg-[#C87A3E] hover:bg-[#B56527] text-[#FAF7F2] cursor-pointer'
                   }`}
                 >
-                  {item.habitType === 'rehab' ? 'Лечь в клинику детокса (-45% зависимостей)' : 'Выполнить'}
+                  {player.age < 14
+                    ? '🔒 с 14 лет'
+                    : item.habitType === 'rehab'
+                    ? 'Лечь в клинику детокса (-45% зависимостей)'
+                    : 'Выполнить'}
                 </button>
               </div>
             ))}
@@ -608,18 +644,18 @@ export const UnderworldNightlifePanel: React.FC<UnderworldNightlifePanelProps> =
       {subTab === 'romance' && (
         <div className="space-y-3">
           {player.age < 12 ? (
-            <div className="rounded-xl bg-amber-950/40 border border-amber-500/40 p-4 text-amber-200 flex items-center gap-3">
-              <Lock className="w-5 h-5 text-amber-400 shrink-0" />
+            <div className="rounded-xl bg-[#C87A3E]/12 border border-[#C87A3E]/40 p-4 text-[#2C2523] flex items-center gap-3">
+              <Lock className="w-5 h-5 text-[#C87A3E] shrink-0" />
               <div>
                 <div className="text-sm font-bold">Романтические отношения заблокированы до 12 лет</div>
-                <div className="text-xs text-amber-300/80 mt-0.5">
+                <div className="text-xs text-[#6E655F] mt-0.5">
                   В детском возрасте развивайте дружбу и играйте с ровесниками. Романтика открывается в подростковом возрасте (с 12 лет).
                 </div>
               </div>
             </div>
           ) : player.age < 18 ? (
-            <div className="rounded-xl bg-pink-950/40 border border-pink-500/40 p-3 text-pink-200 flex items-center gap-2.5 text-xs">
-              <Heart className="w-4 h-4 text-pink-400 shrink-0" />
+            <div className="rounded-xl bg-[#B84A39]/12 border border-[#B84A39]/40 p-3 text-[#2C2523] flex items-center gap-2.5 text-xs">
+              <Heart className="w-4 h-4 text-[#B84A39] shrink-0" />
               <div>
                 <strong>Подростковая романтика (12–17 лет):</strong> Школьная симпатия, прогулки в парке и свидания в кино. Брак и элитные украшения откроются в 18 лет!
               </div>
@@ -627,38 +663,40 @@ export const UnderworldNightlifePanel: React.FC<UnderworldNightlifePanelProps> =
           ) : null}
 
           {activePartner ? (
-            <div className="rounded-xl bg-gradient-to-r from-[#231024] via-[#181429] to-[#101826] border border-pink-500/40 p-3.5 space-y-2.5">
+            <div className="rounded-xl bg-[#F4EFE6] border border-[#B84A39]/50 p-3.5 space-y-2.5">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
-                  <span className="px-2 py-0.5 rounded bg-pink-500/20 text-pink-300 text-[10px] font-bold uppercase">
+                  <span className="px-2 py-0.5 rounded bg-[#B84A39]/15 text-[#B84A39] text-[10px] font-bold uppercase">
                     {player.isMarried ? 'Официальный брак 💍' : 'Ваша вторая половинка ❤️'}
                   </span>
-                  <h3 className="text-sm font-bold text-white mt-1">
+                  <h3 className="text-sm font-bold text-[#2C2523] mt-1">
                     {activePartner.name} ({activePartner.age} лет · {activePartner.profession})
                   </h3>
-                  <p className="text-[11px] text-slate-300">{activePartner.personality}</p>
+                  <p className="text-[11px] text-[#6E655F]">{activePartner.personality}</p>
                 </div>
                 <div className="text-right">
-                  <div className="text-xs font-mono text-pink-300 font-bold">
+                  <div className="text-xs font-mono text-[#B84A39] font-bold">
                     Любовь: {player.partnerRelationship}/100
                   </div>
-                  <div className="text-[11px] font-mono text-emerald-300">
+                  <div className="text-[11px] font-mono text-[#2E6F5E] font-semibold">
                     Вклад в бюджет: +{formatMoney(activePartner.wealthBonusPerMonth, player.currency)}/мес
                   </div>
                 </div>
               </div>
               <div className="flex flex-wrap gap-2">
                 <button
+                  type="button"
                   disabled={player.age < 12}
                   onClick={() => onInteractRomance(activePartner, 'romantic_date')}
-                  className="px-3 py-1.5 rounded-lg bg-pink-600 hover:bg-pink-500 disabled:bg-slate-800 disabled:text-slate-500 text-white text-xs font-bold cursor-pointer disabled:cursor-not-allowed"
+                  className="px-3 py-1.5 rounded-lg bg-[#B84A39] hover:bg-[#9E3D2E] disabled:bg-[#EAE3D5] disabled:text-[#9C9289] text-[#FAF7F2] text-xs font-bold cursor-pointer disabled:cursor-not-allowed"
                 >
                   {player.age < 18 ? 'Свидание в кино / кафе' : 'Свидание в ресторане'} (-{formatMoney(player.age < 18 ? 40 : 240, player.currency)})
                 </button>
                 <button
+                  type="button"
                   disabled={player.age < 18}
                   onClick={() => onInteractRomance(activePartner, 'luxury_gift')}
-                  className="px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 disabled:bg-slate-800 disabled:text-slate-500 text-white text-xs font-bold cursor-pointer disabled:cursor-not-allowed"
+                  className="px-3 py-1.5 rounded-lg bg-[#3B5B76] hover:bg-[#2F495E] disabled:bg-[#EAE3D5] disabled:text-[#9C9289] text-[#FAF7F2] text-xs font-bold cursor-pointer disabled:cursor-not-allowed"
                 >
                   {player.age < 18
                     ? '🔒 Украшения (с 18 лет)'
@@ -666,9 +704,10 @@ export const UnderworldNightlifePanel: React.FC<UnderworldNightlifePanelProps> =
                 </button>
                 {!player.isMarried && (
                   <button
+                    type="button"
                     disabled={player.age < 18}
                     onClick={() => onInteractRomance(activePartner, 'marry')}
-                    className="px-3 py-1.5 rounded-lg bg-amber-400 hover:bg-amber-300 disabled:bg-slate-800 disabled:text-slate-500 text-slate-950 text-xs font-bold cursor-pointer disabled:cursor-not-allowed"
+                    className="px-3 py-1.5 rounded-lg bg-[#C87A3E] hover:bg-[#B56527] disabled:bg-[#EAE3D5] disabled:text-[#9C9289] text-[#FAF7F2] text-xs font-bold cursor-pointer disabled:cursor-not-allowed"
                   >
                     {player.age < 18
                       ? '🔒 Брак (с 18 лет)'
@@ -676,15 +715,16 @@ export const UnderworldNightlifePanel: React.FC<UnderworldNightlifePanelProps> =
                   </button>
                 )}
                 <button
+                  type="button"
                   onClick={() => onInteractRomance(activePartner, 'breakup')}
-                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-rose-900/60 text-slate-300 text-xs font-semibold cursor-pointer"
+                  className="px-3 py-1.5 rounded-lg bg-[#FFFFFF] hover:bg-[#EFE8DC] border border-[#DCD3C2] text-[#6E655F] text-xs font-semibold cursor-pointer"
                 >
                   Расстаться
                 </button>
               </div>
             </div>
           ) : (
-            <div className="rounded-xl bg-[#101620] border border-pink-500/25 p-3 text-xs text-slate-300">
+            <div className="rounded-xl bg-[#F4EFE6] border border-[#DCD3C2] p-3 text-xs text-[#6E655F]">
               У вас пока нет постоянной девушки/партнёра. Выберите симпатию ниже, чтобы пригласить на первое свидание!
             </div>
           )}
@@ -696,37 +736,38 @@ export const UnderworldNightlifePanel: React.FC<UnderworldNightlifePanelProps> =
               return (
                 <div
                   key={p.id}
-                  className={`rounded-xl border p-3 flex flex-col justify-between gap-2 ${
+                  className={`rounded-xl border p-3 flex flex-col justify-between gap-2 shadow-2xs ${
                     isCurrent
-                      ? 'bg-[#1b1326] border-pink-500/50'
-                      : 'bg-[#101620] border-[#1e2938]'
+                      ? 'bg-[#B84A39]/10 border-[#B84A39]'
+                      : 'bg-[#FFFFFF] border-[#DCD3C2]'
                   }`}
                 >
                   <div className="flex items-start gap-2.5">
                     <div
-                      className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 border border-white/15"
+                      className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 border border-[#DCD3C2]"
                       style={{ background: p.outfitColor }}
                     >
                       <Heart className="w-5 h-5 text-white" />
                     </div>
                     <div>
-                      <div className="text-xs font-bold text-slate-100">
+                      <div className="text-xs font-bold text-[#2C2523]">
                         {p.name}, {p.age} лет
                       </div>
-                      <div className="text-[11px] text-pink-300">{p.profession}</div>
-                      <p className="text-[10px] text-slate-400 mt-0.5">{p.personality}</p>
-                      <div className="text-[10px] font-mono text-emerald-300 mt-1">
+                      <div className="text-[11px] font-semibold text-[#B84A39]">{p.profession}</div>
+                      <p className="text-[10px] text-[#6E655F] mt-0.5">{p.personality}</p>
+                      <div className="text-[10px] font-mono text-[#2E6F5E] font-semibold mt-1">
                         Семейный бонус: +{formatMoney(p.wealthBonusPerMonth, player.currency)}/мес ·
                         Счастье +{p.happinessBonus}
                       </div>
                     </div>
                   </div>
                   <button
+                    type="button"
                     disabled={isLocked}
                     onClick={() =>
                       onInteractRomance(p, isCurrent ? 'romantic_date' : 'start_dating')
                     }
-                    className="w-full py-2 rounded-lg bg-pink-600 hover:bg-pink-500 disabled:bg-slate-800 disabled:text-slate-500 text-white text-xs font-bold transition cursor-pointer disabled:cursor-not-allowed"
+                    className="w-full py-2 rounded-lg bg-[#B84A39] hover:bg-[#9E3D2E] disabled:bg-[#EAE3D5] disabled:text-[#9C9289] text-[#FAF7F2] text-xs font-bold transition cursor-pointer disabled:cursor-not-allowed"
                   >
                     {isLocked
                       ? '🔒 с 12 лет'
@@ -745,22 +786,22 @@ export const UnderworldNightlifePanel: React.FC<UnderworldNightlifePanelProps> =
       {subTab === 'nightlife' && (
         <div className="space-y-3">
           {player.age < 18 && (
-            <div className="rounded-xl bg-amber-950/40 border border-amber-500/40 p-4 text-amber-200 flex items-center gap-3">
-              <Lock className="w-5 h-5 text-amber-400 shrink-0" />
+            <div className="rounded-xl bg-[#C87A3E]/12 border border-[#C87A3E]/40 p-4 text-[#2C2523] flex items-center gap-3">
+              <Lock className="w-5 h-5 text-[#C87A3E] shrink-0" />
               <div>
                 <div className="text-sm font-bold">Эскорт и Ночные клубы строго 18+</div>
-                <div className="text-xs text-amber-300/80 mt-0.5">
+                <div className="text-xs text-[#6E655F] mt-0.5">
                   Вход в клубы и заведения 18+ строго по паспорту с 18 лет. Несовершеннолетним вход воспрещён.
                 </div>
               </div>
             </div>
           )}
 
-          <div className="rounded-xl bg-[#141024] border border-purple-500/30 p-3">
-            <div className="text-xs font-bold text-purple-300 uppercase">
+          <div className="rounded-xl bg-[#F4EFE6] border border-[#DCD3C2] p-3">
+            <div className="text-xs font-bold text-[#3B5B76] uppercase">
               Ночные клубы, Приват-лаунжи и Эскорт-сервис
             </div>
-            <div className="text-[11px] text-slate-400">
+            <div className="text-[11px] text-[#6E655F]">
               Мгновенно поднимает настроение и харизму без обязательств.
             </div>
           </div>
@@ -769,30 +810,31 @@ export const UnderworldNightlifePanel: React.FC<UnderworldNightlifePanelProps> =
             {NIGHTLIFE_SERVICES_CATALOG.map((pkg) => (
               <div
                 key={pkg.id}
-                className="rounded-xl bg-[#101620] border border-[#1e2938] p-3 flex flex-col justify-between gap-2"
+                className="rounded-xl bg-[#FFFFFF] border border-[#DCD3C2] p-3 flex flex-col justify-between gap-2 shadow-2xs"
               >
                 <div>
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-bold text-slate-100">{pkg.name}</span>
-                    <span className="text-xs font-mono text-purple-300 font-bold">
+                    <span className="text-xs font-bold text-[#2C2523]">{pkg.name}</span>
+                    <span className="text-xs font-mono text-[#3B5B76] font-bold">
                       {formatMoney(pkg.price, player.currency)}
                     </span>
                   </div>
-                  <div className="text-[10px] font-mono text-pink-300 mt-0.5">{pkg.tierLabel}</div>
-                  <p className="text-[11px] text-slate-400 mt-1">{pkg.description}</p>
+                  <div className="text-[10px] font-mono font-semibold text-[#C87A3E] mt-0.5">{pkg.tierLabel}</div>
+                  <p className="text-[11px] text-[#6E655F] mt-1">{pkg.description}</p>
                   <div className="mt-2 flex gap-1.5 text-[10px] font-mono">
-                    <span className="px-1.5 py-0.5 rounded bg-pink-500/15 text-pink-300">
+                    <span className="px-1.5 py-0.5 rounded bg-[#C87A3E]/15 text-[#B56527] font-semibold">
                       +{pkg.happinessGain} Счастье
                     </span>
-                    <span className="px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-300">
+                    <span className="px-1.5 py-0.5 rounded bg-[#3B5B76]/15 text-[#3B5B76] font-semibold">
                       +{pkg.charismaGain} Харизма
                     </span>
                   </div>
                 </div>
                 <button
+                  type="button"
                   disabled={player.age < 18 || player.money < pkg.price}
                   onClick={() => onEnjoyNightlife(pkg)}
-                  className="w-full py-2 rounded-lg bg-purple-600 hover:bg-purple-500 disabled:bg-slate-800 disabled:text-slate-500 text-white text-xs font-bold transition cursor-pointer disabled:cursor-not-allowed"
+                  className="w-full py-2 rounded-lg bg-[#3B5B76] hover:bg-[#2F495E] disabled:bg-[#EAE3D5] disabled:text-[#9C9289] text-[#FAF7F2] text-xs font-bold transition cursor-pointer disabled:cursor-not-allowed"
                 >
                   {player.age < 18
                     ? '🔒 с 18 лет'

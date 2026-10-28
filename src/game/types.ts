@@ -20,7 +20,50 @@ export type LifeFocus =
 export type SpendingMode = 'Экономный' | 'Баланс' | 'Роскошный';
 
 export type OutfitStyle = 'casual' | 'business' | 'sport' | 'street' | 'luxury';
-export type FacialHairId = 'none' | 'stubble' | 'mustache' | 'goatee' | 'beard' | 'full_beard';
+export type FacialHairId =
+  | 'none'
+  | 'stubble'
+  | 'mustache'
+  | 'goatee'
+  | 'beard'
+  | 'full_beard'
+  | 'mutton_chops';
+
+export type HairstyleId =
+  | 'short'
+  | 'side_part'
+  | 'slick_back'
+  | 'long'
+  | 'ponytail'
+  | 'curly'
+  | 'fade'
+  | 'spiky'
+  | 'bun'
+  | 'balding'
+  | 'bob'
+  | 'hood';
+
+export type WardrobeCategory = 'street' | 'sport' | 'business' | 'luxury';
+export type WardrobeSlot = 'suit' | 'hand_accessory' | 'watch' | 'glasses';
+
+export interface WardrobeItem {
+  id: string;
+  name: string;
+  category: WardrobeCategory;
+  categoryLabel: string;
+  slot: WardrobeSlot;
+  price: number;
+  minAge: number;
+  suitColor?: string;
+  tieColor?: string;
+  handItemType?: 'sport_bag' | 'briefcase' | 'dual_cases';
+  charismaBonus: number;
+  financeBonus: number;
+  strengthBonus: number;
+  statusBonus: number;
+  bonusLabel: string;
+  description: string;
+}
 
 export interface AgeGateInfo {
   allowed: boolean;
@@ -33,7 +76,7 @@ export interface CharacterAppearance {
   label: string;
   skinColor: string;
   hairColor: string;
-  hairStyle: 'short' | 'spiky' | 'long' | 'curly' | 'bob' | 'fade' | 'bun' | 'hood';
+  hairStyle: HairstyleId;
   eyeColor: string;
   shirtColor: string;
   pantsColor: string;
@@ -475,6 +518,13 @@ export interface InvestmentAsset {
   ownedUnits: number;
 }
 
+export interface NpcDialogueTurn {
+  sender: 'player' | 'npc';
+  text: string;
+  age: number;
+  year: number;
+}
+
 export interface NPCFriend {
   id: string;
   name: string;
@@ -484,6 +534,7 @@ export interface NPCFriend {
   avatarSeed: number;
   lastMessage: string;
   metAtAge: number;
+  dialogueHistory?: NpcDialogueTurn[];
 }
 
 export interface EventChoice {
@@ -498,7 +549,19 @@ export interface EventChoice {
   skillKey?: keyof Skills;
   skillDelta?: number;
   followersDelta?: number;
+  stressDelta?: number;
+  injuryRiskPercent?: number;
+  illnessToAdd?: string;
+  clearMilitaryService?: boolean;
 }
+
+export type BackgroundLocationId =
+  | 'parents_room'
+  | 'student_dorm'
+  | 'it_blogger_studio'
+  | 'ceo_office'
+  | 'military_base'
+  | 'frontline_dugout';
 
 export interface LifeEventTemplate {
   id: string;
@@ -796,16 +859,59 @@ export interface PlayerState {
   hasInjury: boolean;           // temporary injury visual
   injuryTurnsLeft: number;
 
-  // Extended appearance customization
+  // Extended appearance customization & Wardrobe Store
   hairstyleId: string;
   facialHairId: FacialHairId;
   hasMask: boolean;
   tattooLevel: number;          // 0-3
   outfitStyle: OutfitStyle;
+  ownedWardrobeIds: string[];
+  equippedSuitId: string | null;
+  equippedAccessoryId: string | null;
+  equippedWatchId: string | null;
+  equippedGlassesId: string | null;
+  militaryServiceActive: boolean;
+  frontlineActive?: boolean;
+  activeIllnesses?: string[];
+  debtDelinquencyTurns?: number;
 
   // Seasonal event tracking
   lastSeasonalEventYear: number;
   birthdayEventFiredThisYear: boolean;
+
+  // 35-turn non-repeating event history & Proactive Incoming NPC Messenger Chat
+  usedEventIds?: string[];
+  activeIncomingNpcChat?: ProactiveNpcChatThread | null;
 }
+
+export interface ProactiveNpcChatFinalChoice {
+  label: string;
+  outcomeText: string;
+  moneyDelta?: number;
+  healthDelta?: number;
+  happinessDelta?: number;
+  relationsDelta?: number;
+  stressDelta?: number;
+  skillKey?: keyof Skills;
+  skillDelta?: number;
+}
+
+export interface ProactiveNpcChatReplyBranch {
+  playerReply: string;
+  npcFollowUp: string;
+  finalChoices: ProactiveNpcChatFinalChoice[];
+}
+
+export interface ProactiveNpcChatThread {
+  id: string;
+  minAge: number;
+  maxAge: number;
+  senderName: string;
+  senderRole: string;
+  avatar: string;
+  openingMessage: string;
+  branches: ProactiveNpcChatReplyBranch[];
+}
+
 
 

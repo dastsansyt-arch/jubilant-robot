@@ -1,33 +1,40 @@
 <!doctype html>
-<html lang="ru" class="dark">
+<html lang="ru">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <meta name="theme-color" content="#070A0F" />
+    <meta name="theme-color" content="#F4EFE6" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="LifeSimEX" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
     <link rel="manifest" href="/manifest.webmanifest" />
-    <title>1in8B: Pixel Life & Urbex Simulator</title>
-    <meta name="description" content="Мобильный пиксельный симулятор жизни с динамическим освещением, карьерой блогера-уберэксера, инвестициями, ИИ-диалогами NPC и редактором модов." />
-    <meta property="og:title" content="1in8B: Pixel Life & Urbex Simulator" />
-    <meta property="og:description" content="Мобильный пиксельный симулятор жизни с динамическим освещением, карьерой блогерой-уберэксера, инвестициями, ИИ-диалогами NPC и редактором модов." />
+    <title>Life Simulator EX — Реалистичный Симулятор Жизни</title>
+    <meta name="description" content="Реалистичный симулятор жизни с 0 лет: карьера, бизнес-империя, гардероб, ВУЗы мира, ИИ-сценарии и семья в теплой бумажной палитре." />
+    <meta property="og:title" content="Life Simulator EX — Реалистичный Симулятор Жизни" />
+    <meta property="og:description" content="Реалистичный симулятор жизни с 0 лет: карьера, бизнес-империя, гардероб, ВУЗы мира, ИИ-сценарии и семья." />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   </head>
-  <body class="bg-[#080c11] text-[#edf2f7] antialiased selection:bg-emerald-500/30 selection:text-emerald-200 overflow-x-hidden" data-state="title">
+  <body class="bg-[#F4EFE6] text-[#2C2523] antialiased selection:bg-[#2E6F5E]/20 selection:text-[#2C2523] overflow-x-hidden" data-state="playing">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
     <script>
+      if ('caches' in window) {
+        caches.keys().then((keys) => {
+          keys.forEach((k) => {
+            if (k !== 'lifesim-ex-warm-cream-v8') caches.delete(k);
+          });
+        });
+      }
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js').catch(() => {});
+          navigator.serviceWorker.register('/sw.js').then((reg) => reg.update()).catch(() => {});
         });
       }
     </script>

@@ -4777,6 +4777,12 @@ const INITIAL_STATE = {
   vehicle: null,
   house: "parents",
   stress: 0,
+  energy: 100,
+  usedEventIds: [],
+  trainedStatsThisMonth: {},
+  hasWinterJacket: false,
+  debtMonths: 0,
+  activeNpcChat: null,
   shadowIncome: 0,
   wantedLevel: 0,
   taxScrutiny: 0,
@@ -4875,7 +4881,7 @@ function ageGate(action) {
 }
 
 function clamp(val, min = 0, max = 100) {
-  return Math.max(min, Math.min(max, Math.round(val)));
+  return Math.max(min, Math.min(max, Math.round(val * 10) / 10));
 }
 
 function addChronicle(title, text = '', tags = []) {
@@ -5177,12 +5183,9 @@ function advanceYear() {
     gameState.happiness = clamp(gameState.happiness + 3);
   }
 
-  // 14. Stress & Health
-  if (gameState.stress > 75) {
-    gameState.health = clamp(gameState.health - 6);
-    chronicleTags.push({ label: "Стресс бьёт по здоровью", type: "tag-expense" });
-  } else {
-    gameState.stress = clamp(gameState.stress - 8);
+  // 14. Hardcore Survival, Stress, Winter Illness, Debt & Peak Stat Decay
+  if (typeof applyHardcoreSurvivalTick === 'function') {
+    applyHardcoreSurvivalTick(12, chronicleTags);
   }
 
   // 15. Quests
@@ -5195,8 +5198,10 @@ function advanceYear() {
   const flavor = getYearFlavorText(gameState.age, gameState.focus);
   addChronicle(`Год ${gameState.currentYear} (Возраст: ${gameState.age})`, flavor, chronicleTags);
 
-  // 18. Random Dilemma roll (40% chance)
-  if (Math.random() <= 0.40) {
+  // 18. 55% Auto-Popup Event (35-turn non-repeating) or Proactive NPC Messenger Chat
+  if (typeof triggerAutoTurnPopupOrChat === 'function') {
+    triggerAutoTurnPopupOrChat();
+  } else if (Math.random() <= 0.55) {
     triggerRandomDilemma();
   }
 
@@ -5482,6 +5487,9 @@ function renderITDashboard() {
       </div>
 
       <div style="display: flex; gap: 10px; align-items: center; margin-top: 6px; flex-wrap: wrap;">
+        <button class="btn btn-finance btn-sm" onclick="openITGradeMinigame()">
+          🕹️ Рабочая задача по грейду (${gradeDef.title})
+        </button>
         ${nextDef ? `
           <button class="btn btn-primary btn-sm" onclick="promoteITGrade()">
             ⭐ Сдать аттестацию на «${nextDef.title}»
@@ -5834,6 +5842,11 @@ function renderBlogDashboard() {
           <div class="stat-mini-label">Фирменный мерч</div>
           <div class="stat-mini-value">${me.merch && me.merch.launched ? 'В продаже' : 'Нет'}</div>
         </div>
+      </div>
+      <div style="margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap;">
+        <button class="btn btn-primary btn-sm" onclick="openBlogGradeMinigame()">
+          🎬 Интерактивная задача блогера (По уровню аудитории)
+        </button>
       </div>
     </div>
   `;
@@ -7121,7 +7134,7 @@ function renderCareerTab() {
             ${nextLvl ? `<div>Следующая ступень: <strong>${nextLvl.title}</strong> (Зарплата x${nextLvl.salaryMult})</div>` : '<div>Вы достигли вершины карьеры!</div>'}
           </div>
           <div style="display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap;">
-            <button class="btn btn-finance btn-sm" onclick="workCareerShift()">💼 Отработать сверхурочную смену (+Бонус)</button>
+            <button class="btn btn-finance btn-sm" onclick="workCareerShift()">💼 Рабочая задача / Смена (Мини-игра по должности)</button>
             ${nextLvl ? `<button class="btn btn-primary btn-sm" onclick="askCareerPromotion()">⭐ Попросить повышение</button>` : ''}
             <button class="btn btn-outline btn-sm" onclick="quitCareer()">🚪 Уволиться</button>
           </div>
@@ -7822,6 +7835,11 @@ function renderBusinessTab() {
       <div class="stat-mini-card"><div class="stat-mini-label">Сотрудников</div><div class="stat-mini-value">${be.companies.reduce((s, c) => s + (c.employees || 0), 0)}</div></div>
       <div class="stat-mini-card"><div class="stat-mini-label">Доход/мес</div><div class="stat-mini-value">${formatMoney(totalRev)}</div></div>
       <div class="stat-mini-card"><div class="stat-mini-label">Прибыль/мес</div><div class="stat-mini-value" style="color:${profit >= 0 ? 'var(--primary)' : 'var(--accent-alert)'}">${formatMoney(profit)}</div></div>
+    </div>
+    <div style="margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap;">
+      <button class="btn btn-finance btn-sm" onclick="openBusinessGradeMinigame()">
+        🤝 Бизнес-задача: Жесткий торг / Антикризис CEO
+      </button>
     </div>`;
 
     // Active risks
@@ -9115,24 +9133,23 @@ function resolveDilemmaChoice(choiceIndex) {
   render();
 }
 
-// ================= trainGym ================
+// ================= trainGym (with Diminishing Returns & Energy Scaling) ================
 function trainGym() {
   if (gameState.gymCooldown > 0) {
-    showToast("Вы уже тренировались в этом году! Мышцам нужен отдых.");
+    showToast("Вы уже тренировались в этом ходе! Мышцам нужен отдых.");
     return;
   }
-  const mult = gameState.sportSupplementsActive ? 1.5 : 1.0;
-  const muscleGain = Math.round(3 * mult);
-  const strengthGain = Math.round(2 * mult);
+  const hasGear = Boolean(gameState.sportSupplementsActive || (gameState.equippedBrands && gameState.equippedBrands.length > 0));
+  const resMuscle = gainStatWithScaling('muscleMass', 1.8, { baseEnergyCost: 14, hasBoostItem: hasGear, requireItemLabel: 'спортпит или экипировка' });
+  if (!resMuscle.ok) return;
+  const resStrength = gainStatWithScaling('strength', 1.6, { baseEnergyCost: 6, hasBoostItem: hasGear, requireItemLabel: 'спортпит или экипировка' });
 
-  gameState.muscleMass = clamp(gameState.muscleMass + muscleGain);
-  gameState.strength = clamp(gameState.strength + strengthGain);
-  gameState.health = clamp(gameState.health - 3);
-  gameState.stress = clamp(gameState.stress - 5);
+  gameState.health = clamp(gameState.health - 2);
+  gameState.stress = clamp(gameState.stress - 4);
   gameState.gymCooldown = 1;
 
-  addChronicle("🏋️ Силовая тренировка в зале", `Отличный памп! Мышечная масса +${muscleGain}%, сила +${strengthGain}.`, [{ label: `Мышцы +${muscleGain}%`, type: 'tag-promo' }]);
-  showToast(`🏋️ Тренировка завершена: Мышцы +${muscleGain}%, Сила +${strengthGain}`);
+  addChronicle("🏋️ Силовая тренировка в зале", `Прогрессивная нагрузка: Мышцы +${resMuscle.gain} (ур. ${gameState.muscleMass}), Сила +${resStrength.gain} (ур. ${gameState.strength}). Энергия: ${Math.round(gameState.energy || 0)}%.`, [{ label: `Мышцы +${resMuscle.gain}`, type: 'tag-promo' }]);
+  showToast(`🏋️ Тренировка: Мышцы +${resMuscle.gain}, Сила +${resStrength.gain} (Энергия: ${Math.round(gameState.energy)}%)`);
   render();
 }
 
@@ -9534,9 +9551,14 @@ function advanceStep(stepType) {
   // 12. Check Historical Events
   checkHistoricalEvents(gameState);
 
-  // 13. Random Dilemma
-  if (Math.random() < (0.15 * fraction) && !gameState.pendingDilemma) {
-    triggerRandomDilemma();
+  // 13. Hardcore Survival, Peak Stat Decay (85-100 -> -1/mo), Winter Illness & Debt Loop
+  if (typeof applyHardcoreSurvivalTick === 'function') {
+    applyHardcoreSurvivalTick(fraction, []);
+  }
+
+  // 14. 55% Auto-Trigger Contextual Event (35-turn non-repeating) or Proactive NPC Chat
+  if (!gameState.pendingDilemma && typeof triggerAutoTurnPopupOrChat === 'function') {
+    triggerAutoTurnPopupOrChat();
   }
 
   gameState.turnsPlayed = (gameState.turnsPlayed || 0) + 1;
@@ -10156,38 +10178,42 @@ function doBabyActivity(type) {
   render();
 }
 
-// ================= doSchoolAction ================
+// ================= doSchoolAction (with Diminishing Returns) ================
 function doSchoolAction(action) {
   if (action === 'homework') {
-    gameState.schoolGPA = Math.min(12.0, gameState.schoolGPA + 0.15);
-    gameState.knowledge = clamp(gameState.knowledge + 2);
-    gameState.stress = clamp(gameState.stress + 3);
-    showToast("📚 Домашнее задание сделано на отлично! GPA повышен.");
+    const r = gainStatWithScaling('knowledge', 1.7, { baseEnergyCost: 12, hasBoostItem: false });
+    if (!r.ok) return;
+    gameState.schoolGPA = Math.min(12.0, gameState.schoolGPA + 0.12);
+    gameState.stress = clamp(gameState.stress + 4);
+    showToast(`📚 Уроки сделаны! Знания +${r.gain}, GPA повышен.`);
   } else if (action === 'tutor') {
     const cost = Math.round(1500 * getCountryData().costIndex);
     if (gameState.money < cost) {
       showToast(`Недостаточно денег на репетитора! Требуется ${formatMoney(cost)}`);
       return;
     }
+    const r = gainStatWithScaling('intellect', 1.9, { baseEnergyCost: 10, hasBoostItem: true });
+    if (!r.ok) return;
     gameState.money -= cost;
-    gameState.schoolGPA = Math.min(12.0, gameState.schoolGPA + 0.35);
-    gameState.intellect = clamp(gameState.intellect + 3);
-    gameState.knowledge = clamp(gameState.knowledge + 3);
-    showToast("🧑‍🏫 Занятие с репетитором прошло блестяще! Оценки растут.");
+    gameState.schoolGPA = Math.min(12.0, gameState.schoolGPA + 0.30);
+    gainStatWithScaling('knowledge', 1.6, { baseEnergyCost: 4, hasBoostItem: true });
+    showToast(`🧑‍🏫 Занятие с репетитором: Интеллект +${r.gain}!`);
   } else if (action === 'olympiad') {
     if (gameState.intellect < 30) {
       showToast("Вам пока не хватает интеллекта (нужно 30+), чтобы пройти отбор на олимпиаду.");
       return;
     }
-    gameState.schoolGPA = Math.min(12.0, gameState.schoolGPA + 0.4);
+    const r = gainStatWithScaling('charisma', 1.7, { baseEnergyCost: 15, hasBoostItem: true });
+    if (!r.ok) return;
+    gameState.schoolGPA = Math.min(12.0, gameState.schoolGPA + 0.35);
     gameState.happiness = clamp(gameState.happiness + 8);
-    gameState.charisma = clamp(gameState.charisma + 4);
-    showToast("🏆 Вы заняли призовое место на олимпиаде! Учителя аплодируют.");
+    showToast(`🏆 Олимпиада: Харизма +${r.gain}, GPA вырос!`);
   } else if (action === 'skip') {
     gameState.schoolGPA = Math.max(2.0, gameState.schoolGPA - 0.25);
     gameState.happiness = clamp(gameState.happiness + 6);
-    gameState.relations = clamp(gameState.relations - 3);
-    showToast("🎒 Вы весело провели время в парке вместо уроков.");
+    gameState.stress = clamp(gameState.stress - 8);
+    gameState.energy = clamp((gameState.energy || 80) + 15);
+    showToast("🎒 Вы прогуляли уроки в парке (+Энергия, -Стресс, -GPA).");
   }
   render();
 }
@@ -10203,11 +10229,1001 @@ function learnLanguage(langCode) {
   if (!gameState.languages) gameState.languages = {};
   const cur = gameState.languages[langCode] || 0;
   gameState.languages[langCode] = Math.min(5, cur + 1);
-  gameState.intellect = clamp(gameState.intellect + 2);
+  gainStatWithScaling('intellect', 1.6, { baseEnergyCost: 8, hasBoostItem: true });
 
   const langObj = LANGUAGES_DATA.find(l => l.code === langCode);
   const name = langObj ? langObj.name : langCode;
   showToast(`🌐 Уровень языка «${name}» повышен до ${gameState.languages[langCode]}!`);
+  render();
+}
+
+// ========================================================
+// 1. DIMINISHING RETURNS STAT SCALING & HARDCORE SURVIVAL
+// ========================================================
+function gainStatWithScaling(statKey, baseRawGain = 1.8, opts = {}) {
+  if (typeof gameState.energy !== 'number') gameState.energy = 100;
+  if (!gameState.trainedStatsThisMonth) gameState.trainedStatsThisMonth = {};
+
+  const curVal = Number(gameState[statKey] || 0);
+  const baseEnergy = opts.baseEnergyCost !== undefined ? opts.baseEnergyCost : 10;
+  const hasBoost = Boolean(
+    opts.hasBoostItem ||
+    gameState.sportSupplementsActive ||
+    (gameState.equippedBrands && gameState.equippedBrands.length > 0) ||
+    (gameState.itState && gameState.itState.learnedTechs && gameState.itState.learnedTechs.length > 0)
+  );
+
+  let energyMult = 1.0;
+  let actualGain = 0;
+
+  if (curVal < 35) {
+    // 0-35: +1.5..+2.0
+    actualGain = Math.min(2.0, Math.max(1.5, baseRawGain));
+    energyMult = 1.0;
+  } else if (curVal < 65) {
+    // 35-65: +0.7..+1.0 and +30% energy cost
+    actualGain = Math.min(1.0, Math.max(0.7, baseRawGain * 0.48));
+    energyMult = 1.3;
+  } else if (curVal < 85) {
+    // 65-85: +0.2..+0.4 (requires supplements / tutor / pro equipment)
+    energyMult = 1.45;
+    if (!hasBoost) {
+      showToast(`⚠️ На уровне ${Math.round(curVal)} стат растёт еле-еле без ${opts.requireItemLabel || 'спортпита/репетитора/оборудования'}!`);
+      actualGain = 0.1;
+    } else {
+      actualGain = Math.min(0.4, Math.max(0.2, baseRawGain * 0.18));
+    }
+  } else {
+    // 85-100: Peak form, +0.1 max, decays -1/month without support
+    energyMult = 1.5;
+    actualGain = 0.1;
+  }
+
+  // Stress > 80% halves productivity/stat gain
+  if ((gameState.stress || 0) > 80) {
+    actualGain = Math.max(0.1, Math.round(actualGain * 5) / 10);
+  }
+
+  const finalEnergyCost = Math.round(baseEnergy * energyMult);
+  if (gameState.energy < finalEnergyCost) {
+    showToast(`⚡ Недостаточно Энергии (${Math.round(gameState.energy)}% < ${finalEnergyCost}%)! Отдохните или снизьте стресс.`);
+    return { ok: false, gain: 0 };
+  }
+
+  gameState.energy = clamp(gameState.energy - finalEnergyCost, 0, 100);
+  actualGain = Math.round(actualGain * 10) / 10;
+  gameState[statKey] = clamp(curVal + actualGain, 0, 100);
+  gameState.trainedStatsThisMonth[statKey] = true;
+
+  return { ok: true, gain: actualGain, energySpent: finalEnergyCost };
+}
+
+function applyHardcoreSurvivalTick(monthsPassed = 1, chronicleTags = []) {
+  if (typeof gameState.energy !== 'number') gameState.energy = 100;
+  if (!gameState.trainedStatsThisMonth) gameState.trainedStatsThisMonth = {};
+
+  // 1) Peak Stat Decay (85-100 decays -1 per month if not actively maintained)
+  const coreSkills = ['strength', 'muscleMass', 'intellect', 'knowledge', 'charisma', 'finance', 'creativity'];
+  const decayedList = [];
+  coreSkills.forEach(sk => {
+    const val = Number(gameState[sk] || 0);
+    if (val >= 85 && !gameState.trainedStatsThisMonth[sk]) {
+      const loss = Math.max(1, Math.round(1 * Math.min(2, monthsPassed)));
+      gameState[sk] = clamp(val - loss, 0, 100);
+      decayedList.push(sk);
+    }
+  });
+  if (decayedList.length > 0 && chronicleTags) {
+    chronicleTags.push({ label: `Пик формы спал (-1): ${decayedList.join(', ')}`, type: 'tag-expense' });
+  }
+  gameState.trainedStatsThisMonth = {};
+
+  // 2) Energy Recovery & Critical Stress (>80% = breakdowns & insomnia -25 Energy)
+  gameState.energy = clamp(gameState.energy + 35, 0, 100);
+  if ((gameState.stress || 0) > 80) {
+    gameState.energy = clamp(gameState.energy - 25, 0, 100);
+    gameState.health = clamp(gameState.health - 8, 0, 100);
+    gameState.happiness = clamp(gameState.happiness - 12, 0, 100);
+    gameState.relations = clamp(gameState.relations - 8, 0, 100);
+    addChronicle("🧠 Нервный срыв и Бессонница (Стресс > 80%)", "Хронический перегруз привёл к паническим атакам, бессоннице (-25 Энергии) и срывам на близких!", [{ label: "-25 Энергии", type: "tag-expense" }]);
+  }
+
+  // 3) Winter without warm jacket -> Illness risk
+  const hasWarmClothes = Boolean(gameState.hasWinterJacket || (gameState.equippedBrands && gameState.equippedBrands.length > 0) || gameState.age < 6);
+  if (gameState.season === "Зима" && !hasWarmClothes && Math.random() < 0.35) {
+    gameState.health = clamp(gameState.health - 12, 0, 100);
+    gameState.stress = clamp(gameState.stress + 10, 0, 100);
+    addChronicle("❄️ Простуда / Пневмония зимой без тёплой куртки!", "Вы замёрзли на ледяном ветру без зимней экипировки. Здоровье -12%, Стресс +10%.", [{ label: "Болезнь зимой", type: "tag-expense" }]);
+  }
+
+  // 4) Financial Pit (< $0): Late penalties, debt collectors, eviction risk
+  if (gameState.money < 0 && gameState.age >= 18) {
+    gameState.debtMonths = (gameState.debtMonths || 0) + 1;
+    const penalty = Math.max(500, Math.round(Math.abs(gameState.money) * 0.10));
+    gameState.money -= penalty;
+    gameState.stress = clamp(gameState.stress + 15, 0, 100);
+    gameState.happiness = clamp(gameState.happiness - 10, 0, 100);
+    addChronicle(`📞 Долговая яма (Просрочка ${gameState.debtMonths} ход.)`, `Начислены пени -${formatMoney(penalty)}. Коллекторы звонят день и ночь (+15% Стресса)!`, [{ label: `Пени -${formatMoney(penalty)}`, type: "tag-expense" }]);
+
+    if (gameState.debtMonths >= 2 && gameState.house !== "parents") {
+      gameState.house = "parents";
+      gameState.health = clamp(gameState.health - 10, 0, 100);
+      gameState.happiness = clamp(gameState.happiness - 18, 0, 100);
+      addChronicle("🏚️ Принудительное выселение за долги!", "Из-за неоплаченных счетов вам заблокировали аренду жилья — пришлось съехать с потерей здоровья и статуса.", [{ label: "Выселение", type: "tag-expense" }]);
+    }
+  } else if (gameState.money >= 0) {
+    gameState.debtMonths = 0;
+  }
+}
+
+// ========================================================
+// 2. GRADE-DEPENDENT PROFESSION MINI-GAMES
+// ========================================================
+window._itBugTimer = null;
+
+function openCareerOrBizMinigame() {
+  if (gameState.itState && gameState.itState.grade > 0) {
+    openITGradeMinigame();
+  } else if (gameState.businessEmpire && gameState.businessEmpire.companies && gameState.businessEmpire.companies.length > 0) {
+    openBusinessGradeMinigame();
+  } else {
+    openITGradeMinigame();
+  }
+}
+
+function workCareerShift() {
+  openCareerOrBizMinigame();
+}
+
+function openITGradeMinigame() {
+  if (window._itBugTimer) {
+    clearInterval(window._itBugTimer);
+    window._itBugTimer = null;
+  }
+  const grade = (gameState.itState && gameState.itState.grade) || 0;
+  const country = getCountryData();
+
+  // Tier 1: Trainee / Junior (grade 0 - 1) -> Bug-Hunting with 10s countdown
+  if (grade <= 1) {
+    const snippets = [
+      {
+        title: "Критическая ошибка в расчёте корзины заказов",
+        lines: [
+          "1: const items = cart.filter(item => item.inStock);",
+          "2: let total = 0;",
+          "3: for (let i = 0; i <= items.length; i++) { total += items[i].price; }",
+          "4: return Math.round(total * 100) / 100;"
+        ],
+        bugIndex: 2,
+        explanation: "В строке 3 условие `i <= items.length` вызывает выход за границы массива (`items[items.length]` === undefined)!"
+      },
+      {
+        title: "Поехавшая верстка и утечка слушателя в React-компоненте",
+        lines: [
+          "1: const [user, setUser] = useState(null);",
+          "2: if (user = null) { return <Spinner />; }",
+          "3: const avatarUrl = user?.profile?.avatar ?? '/default.png';",
+          "4: return <div className='card-row'>{user.name}</div>;"
+        ],
+        bugIndex: 1,
+        explanation: "В строке 2 использовано присваивание `=` вместо строгого сравнения `===`!"
+      }
+    ];
+    const task = snippets[Math.floor(Math.random() * snippets.length)];
+    window._currentItTask = task;
+    window._itSecondsLeft = 10;
+
+    const html = `
+      <div style="display:flex; flex-direction:column; gap:12px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; background:#EFE8DC; padding:8px 12px; border-radius:8px; border:1px solid var(--border-light);">
+          <span style="font-weight:800; color:var(--primary);">💻 Грейд: Trainee / Junior — «Баг-хантинг»</span>
+          <span id="it-bug-timer" style="font-weight:800; color:var(--accent-alert); font-family:monospace; font-size:15px;">⏱️ 10 сек</span>
+        </div>
+        <p style="font-size:13px; color:var(--text-secondary);"><strong>Задача:</strong> ${task.title}. Найдите и кликните на строчку с багом за 10 секунд!</p>
+        <div style="display:flex; flex-direction:column; gap:6px; font-family:monospace;">
+          ${task.lines.map((line, idx) => `
+            <button class="btn-choice" style="font-family:monospace; font-size:12px; text-align:left; background:#FAF7F2;" onclick="resolveITBugHunt(${idx})">
+              ${line.replace(/</g, '&lt;').replace(/>/g, '&gt;')}
+            </button>
+          `).join('')}
+        </div>
+      </div>
+    `;
+    showModal("🐛 IT Мини-игра: Баг-хантинг (Junior)", html);
+
+    window._itBugTimer = setInterval(() => {
+      window._itSecondsLeft -= 1;
+      const el = document.getElementById('it-bug-timer');
+      if (el) el.textContent = `⏱️ ${window._itSecondsLeft} сек`;
+      if (window._itSecondsLeft <= 0) {
+        clearInterval(window._itBugTimer);
+        window._itBugTimer = null;
+        closeModal();
+        gameState.stress = clamp(gameState.stress + 8);
+        showToast("⏰ Время вышло! Деплой откатили, тимлид недоволен (+8% Стресса).");
+        render();
+      }
+    }, 1000);
+    return;
+  }
+
+  // Tier 2: Middle / Senior (grade 2 - 3) -> Architecture & DDoS Load Balancing
+  if (grade <= 3) {
+    const html = `
+      <div style="display:flex; flex-direction:column; gap:12px;">
+        <div style="background:#EFE8DC; padding:8px 12px; border-radius:8px; font-weight:800; color:var(--primary);">
+          🛡️ Грейд: Middle / Senior — «Архитектура и Оптимизация»
+        </div>
+        <p style="font-size:13px; color:var(--text-secondary);">
+          На продакшен идёт DDoS-атака (180 000 RPS), а база данных задыхается от тяжёлых аналитических запросов <code>O(n²)</code>. Выберите архитектурное решение:
+        </p>
+        <div class="dilemma-choices">
+          <button class="btn-choice" onclick="resolveITArchChoice('redis_cdn')">
+            <strong>1. Включить Rate-Limiting на Cloudflare + вынести горячие ключи в Redis Cluster и переписать запрос на индекс B-Tree O(log n)</strong>
+            <div class="choice-meta"><span>Оптимальная архитектура</span><span>Высокий шанс премии</span></div>
+          </button>
+          <button class="btn-choice" onclick="resolveITArchChoice('vertical_scale')">
+            <strong>2. Экстренно залить деньгами вертикальный скейлинг БД (x4 CPU/RAM) без изменения кода</strong>
+            <div class="choice-meta"><span>Дорого для бюджета</span><span>Средний результат</span></div>
+          </button>
+          <button class="btn-choice" onclick="resolveITArchChoice('restart_pods')">
+            <strong>3. Перезапускать воркеры по крону каждые 2 минуты и отключить логирование</strong>
+            <div class="choice-meta"><span>Костыль</span><span>Риск падения продакшена</span></div>
+          </button>
+        </div>
+      </div>
+    `;
+    showModal("⚙️ IT Мини-игра: Архитектура и DDoS (Middle/Senior)", html);
+    return;
+  }
+
+  // Tier 3: Team Lead / CTO (grade >= 4) -> Release Management
+  const html = `
+    <div style="display:flex; flex-direction:column; gap:12px;">
+      <div style="background:#EFE8DC; padding:8px 12px; border-radius:8px; font-weight:800; color:var(--primary);">
+        👑 Грейд: Team Lead / CTO — «Менеджмент релиза»
+      </div>
+      <p style="font-size:13px; color:var(--text-secondary);">
+        До квартального релиза 24 часа. Лид бэкенда и лид фронтенда разругались из-за контракта API, а заказчик требует фичу точно в срок. Ваше решение:
+      </p>
+      <div class="dilemma-choices">
+        <button class="btn-choice" onclick="resolveITCtoChoice('feature_flag')">
+          <strong>1. Зафиксировать API-адаптер, выкатить ядро под Feature Flag вовремя, а спорный модуль довезти патчем через 48ч</strong>
+          <div class="choice-meta"><span>Зрелый менеджмент</span><span>Макс. премия + авторитет</span></div>
+        </button>
+        <button class="btn-choice" onclick="resolveITCtoChoice('crunch')">
+          <strong>2. Объявить ночной кранч с костылём в продакшене ради галочки перед заказчиком</strong>
+          <div class="choice-meta"><span>Техдолг и выгорание</span><span>+Стресс</span></div>
+        </button>
+        <button class="btn-choice" onclick="resolveITCtoChoice('delay')">
+          <strong>3. Официально сдвинуть релиз на 2 недели и устроить разбор полётов</strong>
+          <div class="choice-meta"><span>Штраф по SLA</span><span>Зато команда спокойна</span></div>
+        </button>
+      </div>
+    </div>
+  `;
+  showModal("👑 IT Мини-игра: Менеджмент релиза (Team Lead / CTO)", html);
+}
+
+function resolveITBugHunt(lineIdx) {
+  if (window._itBugTimer) {
+    clearInterval(window._itBugTimer);
+    window._itBugTimer = null;
+  }
+  const task = window._currentItTask;
+  closeModal();
+  const reward = Math.round(6500 * getCountryData().costIndex);
+  if (task && lineIdx === task.bugIndex) {
+    gameState.money += reward;
+    gainStatWithScaling('intellect', 1.7, { baseEnergyCost: 8, hasBoostItem: true });
+    addChronicle("🐛 Баг-хантинг выполнен!", `${task.explanation} Премия: +${formatMoney(reward)}.`, [{ label: `+${formatMoney(reward)}`, type: "tag-income" }]);
+    showToast(`✓ Баг пойман вовремя! Премия +${formatMoney(reward)}`);
+  } else {
+    gameState.stress = clamp(gameState.stress + 6);
+    showToast(`✕ Промах! ${task ? task.explanation : ''} (+6% Стресса)`);
+  }
+  render();
+}
+
+function resolveITArchChoice(opt) {
+  closeModal();
+  const reward = Math.round(18000 * getCountryData().costIndex);
+  if (opt === 'redis_cdn') {
+    gameState.money += reward;
+    gainStatWithScaling('intellect', 1.8, { baseEnergyCost: 10, hasBoostItem: true });
+    addChronicle("🛡️ DDoS отражён, БД оптимизирована!", `Кластер выдержал 180k RPS без единого таймаута! Бонус: +${formatMoney(reward)}.`, [{ label: `+${formatMoney(reward)}`, type: "tag-income" }]);
+    showToast(`✓ Идеальная архитектура! Премия +${formatMoney(reward)}`);
+  } else if (opt === 'vertical_scale') {
+    const half = Math.round(reward * 0.45);
+    gameState.money += half;
+    showToast(`Сервера выстояли, но счёт за облако съел половину бонуса (+${formatMoney(half)}).`);
+  } else {
+    gameState.stress = clamp(gameState.stress + 12);
+    showToast("✕ Прод упал в 3 часа ночи! Пришлось поднимать вручную (+12% Стресса).");
+  }
+  render();
+}
+
+function resolveITCtoChoice(opt) {
+  closeModal();
+  const reward = Math.round(38000 * getCountryData().costIndex);
+  if (opt === 'feature_flag') {
+    gameState.money += reward;
+    gainStatWithScaling('charisma', 1.8, { baseEnergyCost: 10, hasBoostItem: true });
+    gainStatWithScaling('finance', 1.6, { baseEnergyCost: 6, hasBoostItem: true });
+    addChronicle("👑 Блестящий релиз под руководством CTO!", `Релиз прошёл по графику через Feature Flags, команда и заказчик в восторге! Бонус: +${formatMoney(reward)}.`, [{ label: `+${formatMoney(reward)}`, type: "tag-income" }]);
+    showToast(`👑 Высший пилотаж менеджмента! Бонус +${formatMoney(reward)}`);
+  } else if (opt === 'crunch') {
+    gameState.money += Math.round(reward * 0.6);
+    gameState.stress = clamp(gameState.stress + 18);
+    showToast("Релиз сдали на костылях, но команда выгорела (+18% Стресса).");
+  } else {
+    gameState.stress = clamp(gameState.stress - 5);
+    showToast("Релиз перенесли: без бонуса, зато без выгорания.");
+  }
+  render();
+}
+
+// ── BLOGGING & MEDIA MINI-GAMES BY SUBSCRIBER TIER ──
+window._blogTimingInterval = null;
+window._blogTimingPos = 0;
+window._blogTimingDir = 1;
+
+function openBlogGradeMinigame() {
+  if (window._blogTimingInterval) {
+    clearInterval(window._blogTimingInterval);
+    window._blogTimingInterval = null;
+  }
+  const totalSubs = Math.max(
+    (gameState.blogState && gameState.blogState.subscribers) || 0,
+    (gameState.mediaEmpire && gameState.mediaEmpire.totalSubs) || 0,
+    gameState.blogSubscribers || 0
+  );
+
+  // Tier 1: Novice (0 - 10k subs) -> Timing Bar + Clickbait Tag
+  if (totalSubs < 10000) {
+    window._blogTimingPos = 15;
+    window._blogTimingDir = 1;
+    window._selectedBlogTag = '🔥 Проверил на себе: шок-результат за 24 часа';
+
+    const html = `
+      <div style="display:flex; flex-direction:column; gap:12px;">
+        <div style="background:#EFE8DC; padding:8px 12px; border-radius:8px; font-weight:800; color:var(--primary);">
+          🎬 Новичок (0–10к сабов): «Удержание и Монтаж»
+        </div>
+        <p style="font-size:13px; color:var(--text-secondary);">
+          1. Выберите цепляющий заголовок.<br>
+          2. Поймайте бегунок таймлайна в <strong>зелёной зоне (40%–70%)</strong> для идеальной склейки!
+        </p>
+        <select id="blog-tag-select" class="char-focus-select" style="padding:8px; border-radius:6px; border:1px solid var(--border-light);">
+          <option value="good">🔥 Я проверил это на себе: честный разбор без воды</option>
+          <option value="boring">📄 Влог №14: просто обычный вторник</option>
+          <option value="spam">🚨 СКАМ-КЛИКБЕЙТ ШОК СМОТРЕТЬ ВСЕМ 18+</option>
+        </select>
+
+        <div style="position:relative; height:28px; background:#E2D9CC; border-radius:14px; overflow:hidden; border:1px solid #C87A3E;">
+          <div style="position:absolute; left:40%; width:30%; top:0; bottom:0; background:rgba(46,111,94,0.35); border-left:2px dashed #2E6F5E; border-right:2px dashed #2E6F5E;"></div>
+          <div id="blog-timing-cursor" style="position:absolute; left:15%; top:2px; bottom:2px; width:14px; background:#C87A3E; border-radius:7px; transition:left 0.04s linear;"></div>
+        </div>
+
+        <button class="btn btn-primary" onclick="stopBlogTimingBar()">✂️ СДЕЛАТЬ СКЛЕЙКУ СЕЙЧАС!</button>
+      </div>
+    `;
+    showModal("🎬 Мини-игра Блогера: Удержание и Монтаж", html);
+
+    window._blogTimingInterval = setInterval(() => {
+      window._blogTimingPos += window._blogTimingDir * 6;
+      if (window._blogTimingPos >= 92) window._blogTimingDir = -1;
+      if (window._blogTimingPos <= 4) window._blogTimingDir = 1;
+      const cur = document.getElementById('blog-timing-cursor');
+      if (cur) cur.style.left = window._blogTimingPos + '%';
+    }, 45);
+    return;
+  }
+
+  // Tier 2: Influencer (10k - 100k subs) -> Sponsor Bargaining
+  if (totalSubs < 100000) {
+    const html = `
+      <div style="display:flex; flex-direction:column; gap:12px;">
+        <div style="background:#EFE8DC; padding:8px 12px; border-radius:8px; font-weight:800; color:var(--primary);">
+          🤝 Инфлюенсер (10к–100к сабов): «Торг с рекламодателем»
+        </div>
+        <p style="font-size:13px; color:var(--text-secondary);">
+          Бренд гаджетов предлагает базовый прайс за интеграцию, но просит вставить ролик на 3 минуты без пометки рекламы. Как поведёте переговоры?
+        </p>
+        <div class="dilemma-choices">
+          <button class="btn-choice" onclick="resolveBlogSponsorBargain('native_x2')">
+            <strong>1. Показать аналитику удержания (ER 8.4%) и предложить нативный скетч на 60 сек за x1.8 прайса</strong>
+            <div class="choice-meta"><span>Харизма + Лояльность аудитории</span><span>Высокий чек</span></div>
+          </button>
+          <button class="btn-choice" onclick="resolveBlogSponsorBargain('greedy_x3')">
+            <strong>2. Потребовать x3 прайса предоплатой либо пригрозить обзором конкурентов</strong>
+            <div class="choice-meta"><span>Риск срыва сделки</span><span>Азартный ход</span></div>
+          </button>
+          <button class="btn-choice" onclick="resolveBlogSponsorBargain('sellout')">
+            <strong>3. Согласиться на скучный 3-минутный рекламный текст по бумажке</strong>
+            <div class="choice-meta"><span>Гарантированная оплата</span><span>Отписки зрителей</span></div>
+          </button>
+        </div>
+      </div>
+    `;
+    showModal("🤝 Мини-игра Инфлюенсера: Торг с рекламодателем", html);
+    return;
+  }
+
+  // Tier 3: Media Tycoon (100k+ subs) -> Network Management & Anti-Strike
+  const html = `
+    <div style="display:flex; flex-direction:column; gap:12px;">
+      <div style="background:#EFE8DC; padding:8px 12px; border-radius:8px; font-weight:800; color:var(--primary);">
+        👑 Медиа-магнат (100к+ сабов): «Управление сеткой каналов»
+      </div>
+      <p style="font-size:13px; color:var(--text-secondary);">
+        На ваш флагманский канал прилетела координированная атака ботов и 2 страйка, а монтажёры требуют пересмотра ставок перед крупным релизом:
+      </p>
+      <div class="dilemma-choices">
+        <button class="btn-choice" onclick="resolveBlogTycoonChoice('legal_and_bonus')">
+          <strong>1. Подключить юристов партнёрской сети для снятия страйков и ввести KPI-бонусы монтажёрам за удержание</strong>
+          <div class="choice-meta"><span>Взрывной рост сетки</span><span>Максимальный доход</span></div>
+        </button>
+        <button class="btn-choice" onclick="resolveBlogTycoonChoice('drama_video')">
+          <strong>2. Записать громкое разоблачение заказчиков атаки на резервный канал</strong>
+          <div class="choice-meta"><span>Хайп и трафик</span><span>+Стресс</span></div>
+        </button>
+      </div>
+    </div>
+  `;
+  showModal("👑 Мини-игра Медиа-магната: Управление сеткой", html);
+}
+
+function stopBlogTimingBar() {
+  if (window._blogTimingInterval) {
+    clearInterval(window._blogTimingInterval);
+    window._blogTimingInterval = null;
+  }
+  const tagSel = document.getElementById('blog-tag-select');
+  const tagVal = tagSel ? tagSel.value : 'good';
+  const pos = window._blogTimingPos || 0;
+  closeModal();
+
+  const inGreen = pos >= 38 && pos <= 72;
+  const goodTag = tagVal === 'good';
+  if (inGreen && goodTag) {
+    const subsGain = 850 + Math.floor(Math.random() * 600);
+    const bonus = Math.round(4500 * getCountryData().costIndex);
+    gameState.blogSubscribers = (gameState.blogSubscribers || 0) + subsGain;
+    if (gameState.blogState) gameState.blogState.subscribers = (gameState.blogState.subscribers || 0) + subsGain;
+    if (gameState.mediaEmpire && gameState.mediaEmpire.channels && gameState.mediaEmpire.channels[0]) {
+      gameState.mediaEmpire.channels[0].subscribers += subsGain;
+    }
+    gameState.money += bonus;
+    gainStatWithScaling('creativity', 1.8, { baseEnergyCost: 8, hasBoostItem: true });
+    addChronicle("🎬 Идеальный монтаж и удержание 78%!", `Вы поймали тайминг склейки (${Math.round(pos)}%) и выбрали сильный заголовок: +${subsGain} подписчиков и +${formatMoney(bonus)} монетизации!`, [{ label: `+${subsGain} сабов`, type: "tag-promo" }]);
+    showToast(`🔥 Идеальный монтаж! +${subsGain} сабов, +${formatMoney(bonus)}`);
+  } else {
+    const subsGain = 120;
+    gameState.blogSubscribers = (gameState.blogSubscribers || 0) + subsGain;
+    showToast(`Ролик смонтирован (тайминг ${Math.round(pos)}%), но удержание среднее (+${subsGain} сабов).`);
+  }
+  render();
+}
+
+function resolveBlogSponsorBargain(choice) {
+  closeModal();
+  const basePayout = Math.round(28000 * getCountryData().costIndex);
+  if (choice === 'native_x2') {
+    const pay = Math.round(basePayout * 1.8);
+    gameState.money += pay;
+    gainStatWithScaling('charisma', 1.7, { baseEnergyCost: 8, hasBoostItem: true });
+    addChronicle("🤝 Выгодная нативная интеграция!", `Рекламодатель согласился на чек x1.8 (${formatMoney(pay)}), а аудитория оценила юмор в подаче!`, [{ label: `+${formatMoney(pay)}`, type: "tag-income" }]);
+    showToast(`✓ Контракт закрыт на +${formatMoney(pay)} без потери лояльности!`);
+  } else if (choice === 'greedy_x3') {
+    if (gameState.charisma >= 55) {
+      const pay = Math.round(basePayout * 2.5);
+      gameState.money += pay;
+      showToast(`🔥 Ваша харизма сработала! Бренд заплатил ${formatMoney(pay)}!`);
+    } else {
+      showToast("✕ Бренд отказался от переплаты и ушёл к другому блогеру.");
+    }
+  } else {
+    gameState.money += basePayout;
+    gameState.happiness = clamp(gameState.happiness - 6);
+    showToast(`Получено ${formatMoney(basePayout)}, но в комментариях жалуются на скучную рекламу.`);
+  }
+  render();
+}
+
+function resolveBlogTycoonChoice(choice) {
+  closeModal();
+  const payout = Math.round(65000 * getCountryData().costIndex);
+  gameState.money += payout;
+  gainStatWithScaling('finance', 1.7, { baseEnergyCost: 10, hasBoostItem: true });
+  addChronicle("👑 Сетка каналов отбила медиа-атаку!", `Страйки сняты, команда замотивирована, рекламная выручка принесла +${formatMoney(payout)}!`, [{ label: `+${formatMoney(payout)}`, type: "tag-income" }]);
+  showToast(`👑 Медиа-империя укрепила позиции: +${formatMoney(payout)}!`);
+  render();
+}
+
+// ── BUSINESS & RESELL MINI-GAMES BY STAGE ──
+function openBusinessGradeMinigame() {
+  const companies = (gameState.businessEmpire && gameState.businessEmpire.companies) || [];
+  const hasBigCompany = companies.some(c => c.stage && c.stage !== 'Стартап');
+
+  // Tier 1: Reseller / Startup -> 3-Step Hard Bargaining & Legit Check
+  if (!hasBigCompany) {
+    window._bargainStep = 1;
+    window._bargainPrice = 100000;
+    window._bargainAuthentic = Math.random() >= 0.25;
+    renderBargainStepModal();
+    return;
+  }
+
+  // Tier 2: Business Owner / CEO -> Anti-Crisis Management
+  const html = `
+    <div style="display:flex; flex-direction:column; gap:12px;">
+      <div style="background:#EFE8DC; padding:8px 12px; border-radius:8px; font-weight:800; color:var(--primary);">
+        🏢 Владелец бизнеса / CEO: «Антикризисное управление»
+      </div>
+      <p style="font-size:13px; color:var(--text-secondary);">
+        Внезапный кассовый разрыв совпал с камеральной налоговой проверкой. Как перераспределите маржу, ФОТ и маркетинг?
+      </p>
+      <div class="dilemma-choices">
+        <button class="btn-choice" onclick="resolveBizCeoCrisis('rebalance')">
+          <strong>1. Оптимизировать unit-экономику: срезать убыточный перформанс-маркетинг на 30%, сохранить ключевой ФОТ и провести аудит первички</strong>
+          <div class="choice-meta"><span>Сбалансированный антикризис</span><span>Рост прибыли и капитализации</span></div>
+        </button>
+        <button class="btn-choice" onclick="resolveBizCeoCrisis('cut_staff')">
+          <strong>2. Жёстко урезать зарплаты на 40% и заморозить выплаты поставщикам</strong>
+          <div class="choice-meta"><span>Сохранит кэш сейчас</span><span>Удар по репутации</span></div>
+        </button>
+        <button class="btn-choice" onclick="resolveBizCeoCrisis('dumping')">
+          <strong>3. Устроить тотальную распродажу со скидками 50% ради быстрой оборотки</strong>
+          <div class="choice-meta"><span>Оборот вырастет</span><span>Маржинальность упадёт</span></div>
+        </button>
+      </div>
+    </div>
+  `;
+  showModal("🏢 Бизнес Мини-игра: Антикризисное управление (CEO)", html);
+}
+
+function renderBargainStepModal() {
+  const step = window._bargainStep || 1;
+  const curPrice = window._bargainPrice || 100000;
+  const html = `
+    <div style="display:flex; flex-direction:column; gap:12px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; background:#EFE8DC; padding:8px 12px; border-radius:8px;">
+        <span style="font-weight:800; color:var(--primary);">📦 Перекуп / Стартапер: «Жесткий торг» (Шаг ${step} из 3)</span>
+        <span style="font-weight:800; color:var(--accent-action);">Цена партии: ${formatMoney(curPrice)}</span>
+      </div>
+      <p style="font-size:13px; color:var(--text-secondary);">
+        ${step < 3
+          ? 'Выберите аргумент, чтобы продавить поставщика по цене:'
+          : 'Финальный шаг! Проведите Legit Check (проверку партии на оригинальность и серийные номера) перед оплатой:'}
+      </p>
+      <div class="dilemma-choices">
+        ${step < 3 ? `
+          <button class="btn-choice" onclick="nextBargainStep('defect')">
+            <strong>🔍 Указать на микро-дефекты упаковки и потребовать скидку 15%</strong>
+            <div class="choice-meta"><span>Надёжный аргумент</span><span>-12..15% к цене</span></div>
+          </button>
+          <button class="btn-choice" onclick="nextBargainStep('volume')">
+            <strong>📊 Предложить выкуп двойного объёма в следующем месяце за оптовый дисконт</strong>
+            <div class="choice-meta"><span>Проверка Финансов/Харизмы</span><span>-18% к цене</span></div>
+          </button>
+          <button class="btn-choice" onclick="nextBargainStep('bluff')">
+            <strong>🃏 Жёсткий блеф: показать накладную от конкурента на 25% дешевле</strong>
+            <div class="choice-meta"><span>Высокий риск / Высокий куш</span><span>-25% или отказ</span></div>
+          </button>
+        ` : `
+          <button class="btn-choice" onclick="finishBargainDeal('legit_check')">
+            <strong>🔎 Проверить ультрафиолетом пломбы, серийники и чипы (Legit Check) перед расчётом</strong>
+            <div class="choice-meta"><span>Защита от паль/брака</span><span>Гарантированный профит</span></div>
+          </button>
+          <button class="btn-choice" onclick="finishBargainDeal('fast_buy')">
+            <strong>💸 Забрать партию не глядя с доп. скидкой 5% за срочность</strong>
+            <div class="choice-meta"><span>Риск нарваться на реплику</span><span>Быстрая сделка</span></div>
+          </button>
+        `}
+      </div>
+    </div>
+  `;
+  showModal("🤝 Бизнес Мини-игра: Жесткий торг и Legit Check", html);
+}
+
+function nextBargainStep(tactic) {
+  if (tactic === 'defect') {
+    window._bargainPrice = Math.round(window._bargainPrice * 0.86);
+  } else if (tactic === 'volume') {
+    window._bargainPrice = Math.round(window._bargainPrice * 0.82);
+  } else if (tactic === 'bluff') {
+    if (Math.random() < 0.65 || (gameState.charisma || 0) >= 40) {
+      window._bargainPrice = Math.round(window._bargainPrice * 0.76);
+    } else {
+      window._bargainPrice = Math.round(window._bargainPrice * 0.95);
+    }
+  }
+  window._bargainStep = (window._bargainStep || 1) + 1;
+  renderBargainStepModal();
+}
+
+function finishBargainDeal(mode) {
+  closeModal();
+  const discountSaved = Math.max(10000, 100000 - (window._bargainPrice || 80000));
+  const netProfit = Math.round((discountSaved * 0.85) * getCountryData().costIndex);
+  if (mode === 'legit_check') {
+    gameState.money += netProfit;
+    gainStatWithScaling('finance', 1.8, { baseEnergyCost: 10, hasBoostItem: true });
+    addChronicle("📦 Удачный реселл и Legit Check!", `Вы сбили цену до ${formatMoney(window._bargainPrice)}, отсеяли брак при проверке и заработали чистыми +${formatMoney(netProfit)}!`, [{ label: `+${formatMoney(netProfit)}`, type: "tag-income" }]);
+    showToast(`✓ Партия оригинал! Чистая прибыль с перепродажи: +${formatMoney(netProfit)}`);
+  } else {
+    if (window._bargainAuthentic) {
+      gameState.money += Math.round(netProfit * 1.1);
+      showToast(`🔥 Повезло! Партия чистая, профит +${formatMoney(Math.round(netProfit * 1.1))}!`);
+    } else {
+      const loss = Math.round(12000 * getCountryData().costIndex);
+      gameState.money -= loss;
+      showToast(`✕ Без Legit Check вам подсунули реплику! Убыток -${formatMoney(loss)}.`);
+    }
+  }
+  render();
+}
+
+function resolveBizCeoCrisis(strategy) {
+  closeModal();
+  const bonus = Math.round(45000 * getCountryData().costIndex);
+  if (strategy === 'rebalance') {
+    gameState.money += bonus;
+    gainStatWithScaling('finance', 1.8, { baseEnergyCost: 10, hasBoostItem: true });
+    if (gameState.businessEmpire && gameState.businessEmpire.companies && gameState.businessEmpire.companies[0]) {
+      gameState.businessEmpire.companies[0].revenue = Math.round(gameState.businessEmpire.companies[0].revenue * 1.15);
+    }
+    addChronicle("🏢 Антикризисный триумф CEO!", `Кассовый разрыв закрыт, налоговая проверка пройдена без штрафов, чистый профит +${formatMoney(bonus)}!`, [{ label: `+${formatMoney(bonus)}`, type: "tag-income" }]);
+    showToast(`✓ Кризис преодолён! Прибыль +${formatMoney(bonus)}`);
+  } else {
+    gameState.money += Math.round(bonus * 0.4);
+    gameState.stress = clamp(gameState.stress + 10);
+    showToast("Кассовый разрыв закрыли, но команда в напряжении (+10% Стресса).");
+  }
+  render();
+}
+
+// ========================================================
+// 3. 55% AUTO-POPUP EVENTS (35-TURN NON-REPEATING) &
+//    PROACTIVE MULTI-STEP INCOMING NPC MESSENGER CHATS
+// ========================================================
+const PROACTIVE_NPC_THREADS = [
+  {
+    id: 'npc_mom_care',
+    minAge: 6,
+    maxAge: 45,
+    senderName: 'Мама ❤️',
+    senderRole: 'Семья • Голосовое и чат',
+    avatar: '👩',
+    steps: [
+      {
+        npcMsg: 'Сынок, привет! Ты хоть поел нормально сегодня или опять на бутербродах и энергетиках всухомятку? Как там твои дела вообще?',
+        replies: [
+          {
+            label: '«Мам, всё супер, только что пообедал горячим! Как вы с папой?»',
+            npcFollowUp: 'Ой, ну слава богу! Мы с отцом нормально, я тут пирожков напекла и скинула тебе немного на карту, купи себе фруктов ❤️',
+            finalChoices: [
+              { label: 'Поблагодарить маму и заехать в гости на выходных (+Отношения, +Деньги)', effects: { relations: 8, happiness: 6, money: 1500, stress: -6 } },
+              { label: 'Сказать спасибо и побежать дальше по делам (+Деньги)', effects: { relations: 4, money: 1500 } }
+            ]
+          },
+          {
+            label: '«Если честно, зашиваюсь по полной, вообще не до еды сейчас...»',
+            npcFollowUp: 'Так, ну-ка не вздумай мне там гробить желудок! Никакая работа и учёба не стоят здоровья. Сейчас же сходи поешь!',
+            finalChoices: [
+              { label: 'Послушаться маму и заказать нормальный горячий обед (+Здоровье, -Стресс)', effects: { health: 6, stress: -10, relations: 6 } },
+              { label: 'Отмахнуться: «Ладно-ладно, потом поем» (+Стресс)', effects: { stress: 5, relations: -3 } }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    id: 'npc_friend_gym_drive',
+    minAge: 14,
+    maxAge: 40,
+    senderName: 'Димон (Кент) 🤜🤛',
+    senderRole: 'Лучший друг • В сети',
+    avatar: '🧔',
+    steps: [
+      {
+        npcMsg: 'Бро, здарова! Чё киснешь дома? Го сегодня вечером в зал железо потягаем или катнем по ночному городу проветрить голову?',
+        replies: [
+          {
+            label: '«Погнали в зал! Сделаем тяжёлую базу и пообщаемся»',
+            npcFollowUp: 'Красава! Я уже предтрен замешал, через полчаса жду у стойки для жима. Сегодня берём новый рабочий вес! 💪',
+            finalChoices: [
+              { label: 'Выложиться на тренировке с кентом (+Сила, +Мышцы, +Дружба)', effects: { strength: 1.8, muscleMass: 1.8, relations: 7, happiness: 6 } },
+              { label: 'Поделать лёгкий памп и посидеть в сауне (-Стресс, +Здоровье)', effects: { health: 5, stress: -12, relations: 6 } }
+            ]
+          },
+          {
+            label: '«Го лучше катнем вечером по центру, возьмём кофе на заправке»',
+            npcFollowUp: 'Базару ноль! Заеду через 20 минут, включим музло и обсудим новые темки по заработку.',
+            finalChoices: [
+              { label: 'Обсудить совместную темку и кайфануть от ночной поездки (+Финансы, -Стресс)', effects: { finance: 1.6, happiness: 8, stress: -10, relations: 7 } },
+              { label: 'Вернуться пораньше, чтобы выспаться перед завтрашним днём (+Энергия)', effects: { happiness: 5, stress: -6 } }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    id: 'npc_partner_code_complaint',
+    minAge: 16,
+    maxAge: 50,
+    senderName: 'Любимая 💕',
+    senderRole: 'Отношения • Печатает...',
+    avatar: '👱‍♀️',
+    steps: [
+      {
+        npcMsg: 'Слушай, это уже не смешно... Ты опять весь вечер уткнулся в свой монитор и код! Мы вообще проводим время вдвоём или ты женат на ноутбуке?! 😒',
+        replies: [
+          {
+            label: '«Малыш, прости, реально заработался. Закрываю ноут — го в ресторан или закажем роллы!»',
+            npcFollowUp: 'Вот так бы сразу! 🥺 Ладно, только чур телефон на беззвучный, а то опять твой чат рабочий пиликать будет.',
+            finalChoices: [
+              { label: 'Устроить романтический вечер и отключить рабочие чаты (+Любовь, +Счастье, -Стресс)', effects: { relations: 10, happiness: 10, stress: -12, money: -1200 } },
+              { label: 'Посмотреть вместе фильм дома под пледом (+Отношения, -Стресс)', effects: { relations: 7, happiness: 6, stress: -8 } }
+            ]
+          },
+          {
+            label: '«Блин, я же ради нашего будущего стараюсь, сейчас важный дедлайн!»',
+            npcFollowUp: 'Я всё понимаю про деньги и карьеру, но мне нужен живой человек рядом, а не тень за клавиатурой...',
+            finalChoices: [
+              { label: 'Пообещать железно освободить выходные только для неё (+Компромисс)', effects: { relations: 4, finance: 1.5, stress: 4 } },
+              { label: 'Дожать проект до утра любой ценой (+Деньги, но обида)', effects: { money: 8000, relations: -8, stress: 10 } }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    id: 'npc_boss_friday_prod',
+    minAge: 18,
+    maxAge: 60,
+    senderName: 'Тимлид / Босс 💼',
+    senderRole: 'Рабочий мессенджер • СРОЧНО',
+    avatar: '👔',
+    steps: [
+      {
+        npcMsg: 'Привет! Извини что в пятницу вечером, но тут прод лёг после вечернего мержа, платежи не проходят 🚨 Глянешь сейчас? Оплачу в двойном размере!',
+        replies: [
+          {
+            label: '«Уже открываю логи! Сейчас локализую баг и выкачу хотфикс за полчаса»',
+            npcFollowUp: 'Вообще выручаешь! Скинул доступы к стейджингу, бухгалтерия проведёт премию прямо в понедельник.',
+            finalChoices: [
+              { label: 'Красиво починить прод и забрать двойную премию (+Деньги, +Интеллект)', effects: { money: 16000, intellect: 1.8, stress: 8 } },
+              { label: 'Потребовать кроме премии ещё и отгул в понедельник (+Деньги, -Стресс)', effects: { money: 12000, stress: -4, charisma: 1.5 } }
+            ]
+          },
+          {
+            label: '«Сорри, я сейчас не у ноута, смогу глянуть только утром»',
+            npcFollowUp: 'Понял... Придётся поднимать дежурного девопса. Ладно, в понедельник на дейлике разберёмся.',
+            finalChoices: [
+              { label: 'Спокойно отдыхать в свой законный вечер (-Стресс, +Счастье)', effects: { stress: -10, happiness: 6 } }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    id: 'npc_classmate_exam',
+    minAge: 12,
+    maxAge: 23,
+    senderName: 'Макс (Одногруппник) 🎓',
+    senderRole: 'Чат потока • В сети',
+    avatar: '🧑‍🎓',
+    steps: [
+      {
+        npcMsg: 'Йоу! У меня инсайд — слили билеты на завтрашний зачёт, но там половина задач без решений. Сядем сейчас в дискорде прорешаем вместе?',
+        replies: [
+          {
+            label: '«Залетай в голосовой! Сейчас разберём самые жёсткие билеты»',
+            npcFollowUp: 'Лучший! Я уже создал комнату и закинул PDF-ку. Если это раскидаем — автомат у нас в кармане!',
+            finalChoices: [
+              { label: 'Разобрать все билеты до идеала (+Интеллект, +Знания, +GPA)', effects: { intellect: 1.8, knowledge: 1.8, gpa: 0.25, relations: 6 } }
+            ]
+          },
+          {
+            label: '«Да ну, я лучше высплюсь и на месте выкручусь на харизме»',
+            npcFollowUp: 'Ну ты рисковый чел конечно 😂 Ладно, удачи нам завтра на первой паре!',
+            finalChoices: [
+              { label: 'Выспаться и сдать на подвешенном языке (+Харизма, -Стресс)', effects: { charisma: 1.6, stress: -8, happiness: 5 } }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    id: 'npc_commissar_notice',
+    minAge: 18,
+    maxAge: 50,
+    senderName: 'Дежурный ТЦК / Военкомат 🪖',
+    senderRole: 'Официальное уведомление',
+    avatar: '🪖',
+    steps: [
+      {
+        npcMsg: 'Гражданин ' + (typeof gameState !== 'undefined' ? gameState.name : 'Алексей') + ', вам необходимо явиться для сверки учётных данных и прохождения ВЛК в течение 7 дней.',
+        replies: [
+          {
+            label: '«Принято. Предоставлю актуальные документы об отсрочке / работе / учёбе»',
+            npcFollowUp: 'Документы приняты к рассмотрению в реестре. Явка отмечена, нарушений воинского учёта нет.',
+            finalChoices: [
+              { label: 'Спокойно закрыть вопрос по закону (+Статус, -Стресс)', effects: { stress: -6, finance: 1.2 } }
+            ]
+          },
+          {
+            label: '«Подать заявление на добровольный контракт в подразделение БПЛА / связи»',
+            npcFollowUp: 'Заявка одобрена командиром части! Ваша техническая подготовка отлично подходит для профильного взвода.',
+            finalChoices: [
+              { label: 'Подписать контракт с подъёмными выплатами (+Деньги, +Сила)', effects: { money: 25000, strength: 1.8, stress: 10 } },
+              { label: 'Пока ограничиться обновлением учётных данных в резерве', effects: { happiness: 2 } }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+];
+
+function triggerAutoTurnPopupOrChat() {
+  if (!gameState.usedEventIds) gameState.usedEventIds = [];
+  // 55% Auto-Trigger probability on every Next Step
+  if (Math.random() > 0.55) return;
+
+  // 50/50 split between Proactive NPC Messenger Chat (NPCs write first!) and Non-Repeating Contextual Life Dilemma
+  if (Math.random() < 0.50) {
+    triggerProactiveNpcChat();
+  } else {
+    triggerRandomDilemma();
+  }
+}
+
+function triggerRandomDilemma() {
+  if (!gameState.usedEventIds) gameState.usedEventIds = [];
+  const eligible = LIFE_DILEMMAS.filter(d => gameState.age >= d.minAge && gameState.age <= d.maxAge);
+  if (eligible.length === 0) return;
+
+  const fresh = eligible.filter(d => !gameState.usedEventIds.includes(d.id));
+  const pool = fresh.length > 0 ? fresh : eligible;
+  const picked = pool[Math.floor(Math.random() * pool.length)];
+
+  gameState.usedEventIds.push(picked.id);
+  if (gameState.usedEventIds.length > 35) {
+    gameState.usedEventIds = gameState.usedEventIds.slice(-35);
+  }
+
+  gameState.pendingDilemma = picked;
+  showDilemmaModal(picked);
+}
+
+function triggerProactiveNpcChat() {
+  if (!gameState.usedEventIds) gameState.usedEventIds = [];
+  const age = gameState.age || 0;
+  const eligible = PROACTIVE_NPC_THREADS.filter(t => age >= t.minAge && age <= t.maxAge);
+  if (eligible.length === 0) {
+    triggerRandomDilemma();
+    return;
+  }
+
+  const fresh = eligible.filter(t => !gameState.usedEventIds.includes(t.id));
+  const pool = fresh.length > 0 ? fresh : eligible;
+  const thread = pool[Math.floor(Math.random() * pool.length)];
+
+  gameState.usedEventIds.push(thread.id);
+  if (gameState.usedEventIds.length > 35) {
+    gameState.usedEventIds = gameState.usedEventIds.slice(-35);
+  }
+
+  window._activeNpcThread = thread;
+  window._activeNpcReplyIdx = null;
+  window._npcChatHistory = [
+    { from: 'npc', text: thread.steps[0].npcMsg }
+  ];
+  renderProactiveNpcChatModal();
+}
+
+function renderProactiveNpcChatModal() {
+  const thread = window._activeNpcThread;
+  if (!thread) return;
+  const step0 = thread.steps[0];
+  const rIdx = window._activeNpcReplyIdx;
+  const history = window._npcChatHistory || [];
+
+  const messagesHtml = history.map(m => {
+    const isNpc = m.from === 'npc';
+    return `
+      <div style="display:flex; justify-content:${isNpc ? 'flex-start' : 'flex-end'}; margin-bottom:8px;">
+        <div style="max-width:84%; padding:10px 12px; border-radius:12px; font-size:13px; line-height:1.45; background:${isNpc ? '#FFFFFF' : '#2E6F5E'}; color:${isNpc ? '#2C2523' : '#FAF7F2'}; border:1px solid ${isNpc ? '#DCD3C2' : '#2E6F5E'}; box-shadow:0 2px 6px rgba(44,37,35,0.06);">
+          <div style="font-size:10px; font-weight:700; opacity:0.75; margin-bottom:2px;">${isNpc ? thread.senderName : 'Вы'}</div>
+          <div>${m.text}</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  let actionsHtml = '';
+  if (rIdx === null) {
+    actionsHtml = step0.replies.map((rep, idx) => `
+      <button class="btn-choice" onclick="selectNpcFirstReply(${idx})">
+        <strong>💬 ${rep.label}</strong>
+      </button>
+    `).join('');
+  } else {
+    const chosenBranch = step0.replies[rIdx];
+    actionsHtml = chosenBranch.finalChoices.map((fc, fIdx) => `
+      <button class="btn-choice" onclick="finishNpcProactiveChat(${rIdx}, ${fIdx})">
+        <strong>✅ ${fc.label}</strong>
+      </button>
+    `).join('');
+  }
+
+  const html = `
+    <div style="display:flex; flex-direction:column; gap:10px;">
+      <div style="display:flex; align-items:center; gap:10px; padding:8px 12px; background:#EFE8DC; border-radius:10px; border:1px solid #DCD3C2;">
+        <div style="font-size:26px;">${thread.avatar}</div>
+        <div>
+          <div style="font-weight:800; font-size:14px; color:#2C2523;">${thread.senderName}</div>
+          <div style="font-size:11px; color:#6E655F;">${thread.senderRole}</div>
+        </div>
+      </div>
+      <div style="background:#F4EFE6; padding:12px; border-radius:12px; border:1px solid #DCD3C2; max-height:260px; overflow-y:auto;">
+        ${messagesHtml}
+      </div>
+      <div class="dilemma-choices">
+        ${actionsHtml}
+      </div>
+    </div>
+  `;
+  showModal(`📲 Входящее сообщение: ${thread.senderName}`, html);
+}
+
+function selectNpcFirstReply(replyIdx) {
+  const thread = window._activeNpcThread;
+  if (!thread) return;
+  const branch = thread.steps[0].replies[replyIdx];
+  if (!branch) return;
+
+  window._activeNpcReplyIdx = replyIdx;
+  window._npcChatHistory.push({ from: 'player', text: branch.label.replace(/^«|»$/g, '') });
+  window._npcChatHistory.push({ from: 'npc', text: branch.npcFollowUp });
+  renderProactiveNpcChatModal();
+}
+
+function finishNpcProactiveChat(replyIdx, finalIdx) {
+  const thread = window._activeNpcThread;
+  if (!thread) return;
+  const branch = thread.steps[0].replies[replyIdx];
+  const finalChoice = branch && branch.finalChoices[finalIdx];
+  closeModal();
+
+  if (finalChoice && finalChoice.effects) {
+    const ef = finalChoice.effects;
+    if (ef.money) gameState.money += Math.round(ef.money * getCountryData().costIndex);
+    if (ef.health) gameState.health = clamp(gameState.health + ef.health);
+    if (ef.happiness) gameState.happiness = clamp(gameState.happiness + ef.happiness);
+    if (ef.relations) gameState.relations = clamp(gameState.relations + ef.relations);
+    if (ef.stress) gameState.stress = clamp(gameState.stress + ef.stress);
+    if (ef.gpa && gameState.age <= 17) gameState.schoolGPA = Math.min(12.0, gameState.schoolGPA + ef.gpa);
+    if (ef.strength) gainStatWithScaling('strength', ef.strength, { baseEnergyCost: 4, hasBoostItem: true });
+    if (ef.muscleMass) gainStatWithScaling('muscleMass', ef.muscleMass, { baseEnergyCost: 4, hasBoostItem: true });
+    if (ef.intellect) gainStatWithScaling('intellect', ef.intellect, { baseEnergyCost: 4, hasBoostItem: true });
+    if (ef.knowledge) gainStatWithScaling('knowledge', ef.knowledge, { baseEnergyCost: 4, hasBoostItem: true });
+    if (ef.charisma) gainStatWithScaling('charisma', ef.charisma, { baseEnergyCost: 4, hasBoostItem: true });
+    if (ef.finance) gainStatWithScaling('finance', ef.finance, { baseEnergyCost: 4, hasBoostItem: true });
+  }
+
+  addChronicle(`📲 Диалог в мессенджере: ${thread.senderName}`, `Вы пообщались с ${thread.senderName}: ${finalChoice ? finalChoice.label : 'диалог завершён'}.`, [{ label: "Живой чат", type: "tag-event" }]);
+  showToast(`📲 Диалог с ${thread.senderName} завершён!`);
+  saveGame();
   render();
 }
 

@@ -27,13 +27,25 @@ import {
   UniversityProgram,
   AiMemoryEntry,
   AgeGateInfo,
+  WardrobeItem,
+  LifeFocus,
+  BackgroundLocationId,
+  ProactiveNpcChatThread,
 } from './types';
+import {
+  buildMilitaryFrontlineEvents,
+  buildItDevEvents,
+  buildBloggingMediaEvents,
+  buildBusinessCorporateEvents,
+  buildEducationStudyEvents,
+} from './roleEventsCatalog';
 import {
   CITIES_CATALOG,
   CHARACTER_APPEARANCES,
   PETS_CATALOG,
   HOUSES_CATALOG,
   BRANDS_CATALOG,
+  WARDROBE_CATALOG,
   CAREERS_CATALOG,
   INITIAL_INVESTMENTS,
   INITIAL_FRIENDS,
@@ -168,6 +180,7 @@ export function calculateMonthlyExpenses(state: {
   activeVehicleId: string | null;
   activeHobbyIds: string[];
   activeFactionId: string | null;
+  season?: Season;
 }) {
   const house = HOUSES_CATALOG.find((h) => h.id === state.activeHouseId) || HOUSES_CATALOG[0];
   const vehicle = VEHICLES_CATALOG.find((v) => v.id === state.activeVehicleId) || null;
@@ -175,31 +188,44 @@ export function calculateMonthlyExpenses(state: {
     state.spendingMode === 'Экономный' ? 0.65 : state.spendingMode === 'Баланс' ? 1.0 : 1.75;
 
   const isAdult = state.age >= 18;
+  const livesWithParents = house.id === 'parents_home';
+
   const food = isAdult
     ? Math.round(state.city.monthlyFoodBase * spendMult)
+    : livesWithParents
+    ? 0
     : Math.round(state.city.monthlyFoodBase * 0.25 * spendMult);
 
   const hasSmartHome = state.installedHouseTuningIds.includes('tune_home_smart');
+  const winterHeatingMult = state.season === 'Зима' ? 1.35 : 1.0;
   const rawUtilities =
-    isAdult || house.id !== 'parents_home'
-      ? Math.round(state.city.monthlyUtilitiesBase * house.floors * (hasSmartHome ? 0.6 : 1.0))
+    isAdult || !livesWithParents
+      ? Math.round(
+          state.city.monthlyUtilitiesBase *
+            house.floors *
+            (hasSmartHome ? 0.6 : 1.0) *
+            winterHeatingMult
+        )
       : 0;
 
   const rentOrUpkeep =
-    house.id === 'parents_home'
+    livesWithParents
       ? isAdult
         ? Math.round(state.city.monthlyRentBase * 0.6)
         : 0
       : Math.round(house.upkeepAnnual / 12);
 
-  const transport = vehicle ? vehicle.monthlyUpkeep : isAdult ? 45 : 15;
+  const transport = vehicle ? vehicle.monthlyUpkeep : isAdult ? 45 : livesWithParents ? 0 : 15;
 
-  const hobbiesCost = state.activeHobbyIds.reduce((sum, id) => {
-    const h = HOBBIES_80.find((item) => item.id === id);
-    return sum + (h ? h.monthlyCost : 0);
-  }, 0);
+  const hobbiesCost =
+    state.age >= 6
+      ? state.activeHobbyIds.reduce((sum, id) => {
+          const h = HOBBIES_80.find((item) => item.id === id);
+          return sum + (h ? h.monthlyCost : 0);
+        }, 0)
+      : 0;
 
-  const faction = FACTIONS_26.find((f) => f.id === state.activeFactionId);
+  const faction = state.age >= 14 ? FACTIONS_26.find((f) => f.id === state.activeFactionId) : undefined;
   const factionFee = faction && faction.monthlyBonusOrFee < 0 ? Math.abs(faction.monthlyBonusOrFee) : 0;
 
   const hobbiesAndFaction = hobbiesCost + factionFee;
@@ -282,9 +308,9 @@ export function createInitialPlayerState(
     heightCm: startingAge === 0 ? 52 : Math.round(60 + startingAge * 8),
     weightKg: startingAge === 0 ? 4 : Math.round(8 + startingAge * 3),
 
-    focus: startingAge === 0 ? 'Раннее развитие' : 'Учёба',
+    focus: startingAge < 6 ? 'Раннее развитие' : 'Учёба',
     spendingMode: 'Баланс',
-    money: 1500,
+    money: startingAge === 0 ? 0 : startingAge < 18 ? 300 : 1500,
     isBankrupt: false,
     skills: {
       intellect: startingAge === 0 ? 12 : 28,
@@ -321,7 +347,7 @@ export function createInitialPlayerState(
     languages: initialLanguages,
     localColleges: secEdu.localColleges,
     completedEducationIds: [],
-    activeHobbyIds: ['hobby_1'],
+    activeHobbyIds: startingAge >= 6 ? ['hobby_1'] : [],
     activeFactionId: null,
     attendedArtistIds: [],
     collabArtistIds: [],
@@ -337,8 +363,8 @@ export function createInitialPlayerState(
       currentCombo: 0,
       sectorMetrics: {},
     },
-    urbexSubscribers: 140,
-    urbexVideosCount: 2,
+    urbexSubscribers: startingAge >= 12 ? 140 : 0,
+    urbexVideosCount: startingAge >= 16 ? 2 : 0,
     urbexRaidsDone: 0,
 
     ownedBusinesses: [],
@@ -359,9 +385,9 @@ export function createInitialPlayerState(
     ownedVehicleIds: [],
     installedVehicleTuningIds: [],
 
-    activeSmartphoneId: 'phone_redmi_note13',
+    activeSmartphoneId: startingAge >= 12 ? 'phone_redmi_note13' : null,
     activeLaptopId: null,
-    ownedTechGadgetIds: ['phone_redmi_note13'],
+    ownedTechGadgetIds: startingAge >= 12 ? ['phone_redmi_note13'] : [],
     customPcBuild: {
       cpu: null,
       gpu: null,
@@ -451,6 +477,15 @@ export function createInitialPlayerState(
     hasMask: false,
     tattooLevel: 0,
     outfitStyle: 'casual' as const,
+    ownedWardrobeIds: [],
+    equippedSuitId: null,
+    equippedAccessoryId: null,
+    equippedWatchId: null,
+    equippedGlassesId: null,
+    militaryServiceActive: false,
+    frontlineActive: false,
+    activeIllnesses: [],
+    debtDelinquencyTurns: 0,
     lastSeasonalEventYear: -1,
     birthdayEventFiredThisYear: false,
   };
@@ -509,6 +544,36 @@ export function calculateActiveBonuses(state: PlayerState) {
     return sum + (h ? h.monthlyRentIncome * 12 : 0);
   }, 0);
 
+  const ownedWardrobeSet = new Set(state.ownedWardrobeIds || []);
+  const equippedSuit =
+    state.equippedSuitId && ownedWardrobeSet.has(state.equippedSuitId)
+      ? WARDROBE_CATALOG.find((w) => w.id === state.equippedSuitId) || null
+      : null;
+  const equippedAccessory =
+    state.equippedAccessoryId && ownedWardrobeSet.has(state.equippedAccessoryId)
+      ? WARDROBE_CATALOG.find((w) => w.id === state.equippedAccessoryId) || null
+      : null;
+  const equippedWatch =
+    state.equippedWatchId && ownedWardrobeSet.has(state.equippedWatchId)
+      ? WARDROBE_CATALOG.find((w) => w.id === state.equippedWatchId) || null
+      : null;
+  const equippedGlasses =
+    state.equippedGlassesId && ownedWardrobeSet.has(state.equippedGlassesId)
+      ? WARDROBE_CATALOG.find((w) => w.id === state.equippedGlassesId) || null
+      : null;
+
+  const activeWardrobeItems = [
+    equippedSuit,
+    equippedAccessory,
+    equippedWatch,
+    equippedGlasses,
+  ].filter(Boolean) as WardrobeItem[];
+
+  const wardrobeCharismaBonus = activeWardrobeItems.reduce((s, w) => s + w.charismaBonus, 0);
+  const wardrobeFinanceBonus = activeWardrobeItems.reduce((s, w) => s + w.financeBonus, 0);
+  const wardrobeStrengthBonus = activeWardrobeItems.reduce((s, w) => s + w.strengthBonus, 0);
+  const wardrobeStatusBonus = activeWardrobeItems.reduce((s, w) => s + w.statusBonus, 0);
+
   return {
     pet,
     petHealthBonus: pet ? pet.healthBonus : 0,
@@ -522,12 +587,20 @@ export function calculateActiveBonuses(state: PlayerState) {
     vehicleTunings,
     hasWeatherProtection,
     brandUrbexBonus,
-    brandCharismaBonus,
-    brandStylePoints,
-    tuningPrestige,
+    brandCharismaBonus: brandCharismaBonus + wardrobeCharismaBonus,
+    brandStylePoints: brandStylePoints + wardrobeStatusBonus,
+    tuningPrestige: tuningPrestige + wardrobeStatusBonus,
     vehicleTotalHp,
-    homeMuscleBonus,
+    homeMuscleBonus: homeMuscleBonus + wardrobeStrengthBonus,
     rentalAnnualIncome,
+    equippedSuit,
+    equippedAccessory,
+    equippedWatch,
+    equippedGlasses,
+    wardrobeCharismaBonus,
+    wardrobeFinanceBonus,
+    wardrobeStrengthBonus,
+    wardrobeStatusBonus,
   };
 }
 
@@ -847,6 +920,9 @@ export function regenerateLocalColleges(state: PlayerState, seedOffset: number):
 
 // Buy Smartphone, Laptop, Console, Camera or Tech Gadget
 export function buyOrEquipTechGadget(state: PlayerState, item: TechGadgetItem): PlayerState {
+  if (!getAgeGate('tech_gadget', state.age).allowed) {
+    return state;
+  }
   const owned = state.ownedTechGadgetIds.includes(item.id);
   if (!owned && state.money < item.price) {
     return state;
@@ -902,6 +978,9 @@ export function buyOrEquipTechGadget(state: PlayerState, item: TechGadgetItem): 
 
 // Install / Upgrade Component in Custom PC Builder
 export function installPcComponent(state: PlayerState, comp: PcComponentItem): PlayerState {
+  if (!getAgeGate('pc_build', state.age).allowed) {
+    return state;
+  }
   if (state.customPcBuild[comp.slot] === comp.id || state.money < comp.price) {
     return state;
   }
@@ -946,6 +1025,9 @@ export function buyOrUpgradeBusiness(
   item: BusinessFranchiseItem,
   mode: 'buy' | 'upgrade' | 'branch'
 ): PlayerState {
+  if (!getAgeGate('business', state.age).allowed) {
+    return state;
+  }
   const existing = state.ownedBusinesses.find((b) => b.businessId === item.id);
 
   if (mode === 'buy') {
@@ -1039,6 +1121,9 @@ export function runPoliticalCampaignAction(
   state: PlayerState,
   actionType: 'rally' | 'tv_debate' | 'charity_fund'
 ): PlayerState {
+  if (!getAgeGate('politics', state.age).allowed) {
+    return state;
+  }
   const cost = actionType === 'rally' ? 800 : actionType === 'tv_debate' ? 2200 : 4500;
   if (state.money < cost) return state;
 
@@ -1078,6 +1163,7 @@ export function runPoliticalCampaignAction(
 
 export function electPoliticalPosition(state: PlayerState, pos: PoliticalPosition): PlayerState {
   if (
+    !getAgeGate('politics', state.age).allowed ||
     state.age < pos.minAge ||
     state.skills.charisma < pos.requiredCharisma ||
     state.approvalRating < pos.requiredApproval ||
@@ -1110,6 +1196,9 @@ export function electPoliticalPosition(state: PlayerState, pos: PoliticalPositio
 }
 
 export function enactPoliticalReform(state: PlayerState, reform: PoliticalReform): PlayerState {
+  if (!getAgeGate('politics', state.age).allowed) {
+    return state;
+  }
   const currentPos = POLITICAL_POSITIONS.find((p) => p.id === state.politicalPositionId);
   const currentTier = currentPos ? currentPos.tier : 0;
   if (
@@ -1147,6 +1236,28 @@ export function enactPoliticalReform(state: PlayerState, reform: PoliticalReform
   };
 }
 
+// Deterministic pro-rating helper so 360 days / 48 weeks / 12 months sum to the exact annual integer amount
+export function proRateAnnualInt(
+  annualAmount: number,
+  step: TurnStepMode,
+  monthOfYear: number,
+  dayOfMonth: number
+): number {
+  if (annualAmount === 0) return 0;
+  if (step === 'year') return Math.round(annualAmount);
+  const m = Math.max(1, Math.min(12, monthOfYear));
+  const d = Math.max(1, Math.min(30, dayOfMonth));
+  if (step === 'month') {
+    return Math.round((m * annualAmount) / 12) - Math.round(((m - 1) * annualAmount) / 12);
+  }
+  if (step === 'week') {
+    const weekIdx = (m - 1) * 4 + Math.min(3, Math.floor((d - 1) / 7));
+    return Math.round(((weekIdx + 1) * annualAmount) / 48) - Math.round((weekIdx * annualAmount) / 48);
+  }
+  const dayIdx = (m - 1) * 30 + (d - 1);
+  return Math.round(((dayIdx + 1) * annualAmount) / 360) - Math.round((dayIdx * annualAmount) / 360);
+}
+
 // Universal turn advancement supporting Day, Week, Month, or Year!
 export function advanceTurnByStep(state: PlayerState, stepOverride?: TurnStepMode): PlayerState {
   if (!state.isAlive) return state;
@@ -1158,33 +1269,48 @@ export function advanceTurnByStep(state: PlayerState, stepOverride?: TurnStepMod
 
   let nextDay = state.dayOfMonth;
   let nextMonth = state.monthOfYear;
+  let newYear = state.currentYear;
+  let newAge = state.age;
   let yearsIncrement = 0;
 
-  if (step === 'day') {
-    nextDay += 1;
-    if (nextDay > 30) {
-      nextDay = 1;
-      nextMonth += 1;
-    }
-  } else if (step === 'week') {
-    nextDay += 7;
-    if (nextDay > 30) {
-      nextDay -= 30;
-      nextMonth += 1;
-    }
-  } else if (step === 'month') {
-    nextMonth += 1;
-  } else {
+  if (step === 'year') {
+    newYear += 1;
+    newAge += 1;
     yearsIncrement = 1;
+  } else {
+    if (step === 'day') {
+      nextDay += 1;
+      if (nextDay > 30) {
+        nextDay = 1;
+        nextMonth += 1;
+      }
+    } else if (step === 'week') {
+      nextDay += 7;
+      if (nextDay > 30) {
+        nextDay -= 30;
+        nextMonth += 1;
+      }
+    } else if (step === 'month') {
+      nextMonth += 1;
+    }
+
+    if (nextMonth > 12) {
+      nextMonth -= 12;
+      newYear += 1;
+    }
+
+    const hasHadBirthdayThisYear =
+      nextMonth > state.birthMonth ||
+      (nextMonth === state.birthMonth && nextDay >= state.birthDay);
+    const calculatedAge = Math.max(0, newYear - state.birthYear - (hasHadBirthdayThisYear ? 0 : 1));
+    newAge = Math.max(state.age, calculatedAge);
+    yearsIncrement = newAge - state.age;
   }
 
-  if (nextMonth > 12) {
-    nextMonth -= 12;
-    yearsIncrement += 1;
-  }
-
-  const newAge = state.age + yearsIncrement;
-  const newYear = state.currentYear + yearsIncrement;
+  // Auto-transition infant focus when reaching school age (6+)
+  const INFANT_FOCUSES: LifeFocus[] = ['Раннее развитие', 'Активный малыш', 'Любимчик семьи'];
+  const effectiveFocus: LifeFocus =
+    newAge >= 6 && INFANT_FOCUSES.includes(state.focus) ? 'Учёба' : state.focus;
 
   const seasonByMonth: Season =
     nextMonth >= 3 && nextMonth <= 5
@@ -1201,21 +1327,25 @@ export function advanceTurnByStep(state: PlayerState, stepOverride?: TurnStepMod
     newAge * 31 + nextMonth * 7 + nextDay + Math.round(state.money)
   );
 
-  const bonuses = calculateActiveBonuses(state);
-  const expenses = calculateMonthlyExpenses(state);
-  const bizSummary = calculateMonthlyBusinessSummary(state);
+  const stateForCalc = { ...state, age: newAge, focus: effectiveFocus, season: seasonByMonth };
+  const bonuses = calculateActiveBonuses(stateForCalc);
+  const expenses = calculateMonthlyExpenses(stateForCalc);
+  const bizSummary = calculateMonthlyBusinessSummary(stateForCalc);
+  const pcStats = calculateCustomPcStats(stateForCalc);
 
-  const scale = Math.max(0.15, yearFraction);
-  let healthDelta = Math.round(
-    (bonuses.petHealthBonus + (bonuses.house.energyRecoveryBonus > 5 ? 3 : 0) - 1) * scale
-  );
-  let happinessDelta = Math.round(bonuses.petHappinessBonus * scale);
+  const proRate = (annualAmount: number) => proRateAnnualInt(annualAmount, step, nextMonth, nextDay);
+
+  // HARDCORE SURVIVAL RULE: Health no longer regenerates passively for free!
+  let healthDelta = 0;
+  let happinessDelta = proRate(bonuses.petHappinessBonus);
   let knowledgeDelta = 0;
   let relationsDelta = 0;
   const newSkills = { ...state.skills };
   let followersGain = 0;
   let nextSchoolGrade = state.schoolGradeAvg;
   const nextLanguages = { ...state.languages };
+  const nextIllnesses = Array.isArray(state.activeIllnesses) ? [...state.activeIllnesses] : [];
+  let survivalNotes = '';
 
   // Native language natural acquisition during childhood
   const nativeLang = getNativeLanguageForCountry(state.city.countryCode);
@@ -1226,128 +1356,144 @@ export function advanceTurnByStep(state: PlayerState, stepOverride?: TurnStepMod
   // Bad habits chronic drain
   const totalAddiction = state.habits.smoking + state.habits.alcohol + state.habits.drugs;
   if (totalAddiction > 40) {
-    healthDelta -= Math.max(1, Math.round((totalAddiction / 35) * scale));
+    healthDelta -= proRate(Math.round(totalAddiction / 30));
   }
 
   // Romance partner bonus
   const activePartner = ROMANCE_PARTNERS_CATALOG.find((p) => p.id === state.activePartnerId);
   let partnerIncome = 0;
   if (activePartner) {
-    happinessDelta += Math.max(1, Math.round(activePartner.happinessBonus * 0.4 * scale));
+    happinessDelta += proRate(Math.round(activePartner.happinessBonus * 0.4));
     if (state.isMarried || state.partnerRelationship >= 70) {
       partnerIncome = Math.round(activePartner.wealthBonusPerMonth * monthsPassed);
     }
   }
 
-  if (state.focus === 'Учёба') {
-    knowledgeDelta += Math.max(1, Math.round(5 * scale));
-    newSkills.intellect = clampStat(newSkills.intellect + Math.max(1, Math.round(4 * scale)));
+  if (effectiveFocus === 'Учёба') {
+    knowledgeDelta += proRate(5);
+    newSkills.intellect = clampStat(newSkills.intellect + proRate(4));
     if (newAge >= 6 && newAge <= 18) {
-      nextSchoolGrade = Number(Math.min(12.0, nextSchoolGrade + 0.25 * scale).toFixed(1));
+      nextSchoolGrade = Number(Math.min(12.0, nextSchoolGrade + 0.25 * yearFraction).toFixed(2));
     }
-  } else if (state.focus === 'Спорт и Сила') {
+  } else if (effectiveFocus === 'Спорт и Сила') {
     const gymBoost = state.activeFactionId === 'fac_5' ? 2 : 1;
-    newSkills.strength = clampStat(newSkills.strength + Math.max(1, Math.round(6 * scale * gymBoost)));
-    newSkills.muscleMass = clampStat(newSkills.muscleMass + Math.max(1, Math.round(6 * scale * gymBoost)));
-    newSkills.fitness = clampStat(newSkills.fitness + Math.max(1, Math.round(5 * scale)));
-    healthDelta += Math.max(1, Math.round(5 * scale));
-  } else if (state.focus === 'Бизнес и Политика') {
-    newSkills.finance = clampStat(newSkills.finance + Math.max(1, Math.round(5 * scale)));
-    newSkills.charisma = clampStat(newSkills.charisma + Math.max(1, Math.round(5 * scale)));
-    relationsDelta += Math.max(1, Math.round(3 * scale));
-  } else if (state.focus === 'Медиа и Музыка') {
-    newSkills.creativity = clampStat(newSkills.creativity + Math.max(1, Math.round(5 * scale)));
-    newSkills.charisma = clampStat(newSkills.charisma + Math.max(1, Math.round(4 * scale)));
-    followersGain += Math.round((220 + newSkills.creativity * 14) * bonuses.house.blogGrowthBonus * scale);
-  } else if (state.focus === 'Уберэкс') {
-    newSkills.urbex = clampStat(newSkills.urbex + Math.max(1, Math.round(5 * scale)));
-    newSkills.creativity = clampStat(newSkills.creativity + Math.max(1, Math.round(3 * scale)));
+    newSkills.strength = clampStat(newSkills.strength + proRate(6 * gymBoost));
+    newSkills.muscleMass = clampStat(newSkills.muscleMass + proRate(6 * gymBoost));
+    newSkills.fitness = clampStat(newSkills.fitness + proRate(5));
+  } else if (effectiveFocus === 'Бизнес и Политика') {
+    newSkills.finance = clampStat(newSkills.finance + proRate(5));
+    newSkills.charisma = clampStat(newSkills.charisma + proRate(5));
+    relationsDelta += proRate(3);
+  } else if (effectiveFocus === 'Медиа и Музыка') {
+    newSkills.creativity = clampStat(newSkills.creativity + proRate(5));
+    newSkills.charisma = clampStat(newSkills.charisma + proRate(4));
+    followersGain += Math.round((220 + newSkills.creativity * 14) * bonuses.house.blogGrowthBonus * yearFraction);
+  } else if (effectiveFocus === 'Уберэкс') {
+    newSkills.urbex = clampStat(newSkills.urbex + proRate(5));
+    newSkills.creativity = clampStat(newSkills.creativity + proRate(3));
     followersGain += Math.round(
-      (180 + newSkills.urbex * 12) * bonuses.petFollowerMultiplier * bonuses.house.blogGrowthBonus * scale
+      (180 + newSkills.urbex * 12) * bonuses.petFollowerMultiplier * bonuses.house.blogGrowthBonus * yearFraction
     );
-  } else if (state.focus === 'Карьера') {
-    newSkills.intellect = clampStat(newSkills.intellect + Math.max(1, Math.round(3 * scale)));
-    newSkills.charisma = clampStat(newSkills.charisma + Math.max(1, Math.round(3 * scale)));
-    knowledgeDelta += Math.max(1, Math.round(2 * scale));
-  } else if (state.focus === 'Инвестиции') {
-    newSkills.finance = clampStat(newSkills.finance + Math.max(1, Math.round(5 * scale)));
-    knowledgeDelta += Math.max(1, Math.round(3 * scale));
-  } else if (state.focus === 'Раннее развитие') {
-    knowledgeDelta += Math.max(1, Math.round(4 * scale));
-    newSkills.intellect = clampStat(newSkills.intellect + Math.max(1, Math.round(5 * scale)));
-    newSkills.charisma = clampStat(newSkills.charisma + Math.max(1, Math.round(3 * scale)));
-  } else if (state.focus === 'Активный малыш') {
-    healthDelta += Math.max(1, Math.round(6 * scale));
-    newSkills.strength = clampStat(newSkills.strength + Math.max(1, Math.round(4 * scale)));
-    newSkills.fitness = clampStat(newSkills.fitness + Math.max(1, Math.round(5 * scale)));
-  } else if (state.focus === 'Любимчик семьи') {
-    happinessDelta += Math.max(1, Math.round(6 * scale));
-    relationsDelta += Math.max(1, Math.round(6 * scale));
-    newSkills.charisma = clampStat(newSkills.charisma + Math.max(1, Math.round(3 * scale)));
+  } else if (effectiveFocus === 'Карьера') {
+    newSkills.intellect = clampStat(newSkills.intellect + proRate(3));
+    newSkills.charisma = clampStat(newSkills.charisma + proRate(3));
+    knowledgeDelta += proRate(2);
+  } else if (effectiveFocus === 'Инвестиции') {
+    newSkills.finance = clampStat(newSkills.finance + proRate(5));
+    knowledgeDelta += proRate(3);
+  } else if (effectiveFocus === 'Раннее развитие') {
+    knowledgeDelta += proRate(4);
+    newSkills.intellect = clampStat(newSkills.intellect + proRate(5));
+    newSkills.charisma = clampStat(newSkills.charisma + proRate(3));
+  } else if (effectiveFocus === 'Активный малыш') {
+    newSkills.strength = clampStat(newSkills.strength + proRate(4));
+    newSkills.fitness = clampStat(newSkills.fitness + proRate(5));
+  } else if (effectiveFocus === 'Любимчик семьи') {
+    happinessDelta += proRate(6);
+    relationsDelta += proRate(6);
+    newSkills.charisma = clampStat(newSkills.charisma + proRate(3));
   }
 
-  for (const hId of state.activeHobbyIds) {
-    const h = HOBBIES_80.find((item) => item.id === hId);
-    if (h) {
-      newSkills[h.skillKey] = clampStat(newSkills[h.skillKey] + Math.max(1, Math.round(h.skillGain * scale)));
-      if (h.strengthGain > 0) {
-        newSkills.strength = clampStat(newSkills.strength + Math.max(1, Math.round(h.strengthGain * scale)));
+  if (newAge >= 6) {
+    for (const hId of state.activeHobbyIds) {
+      const h = HOBBIES_80.find((item) => item.id === hId);
+      if (h) {
+        newSkills[h.skillKey] = clampStat(newSkills[h.skillKey] + proRate(h.skillGain));
+        if (h.strengthGain > 0) {
+          newSkills.strength = clampStat(newSkills.strength + proRate(h.strengthGain));
+        }
+        if (h.muscleGain > 0) {
+          newSkills.muscleMass = clampStat(newSkills.muscleMass + proRate(h.muscleGain));
+        }
+        happinessDelta += proRate(h.happinessGain);
+        if (h.healthDelta < 0) {
+          healthDelta += proRate(h.healthDelta);
+        }
       }
-      if (h.muscleGain > 0) {
-        newSkills.muscleMass = clampStat(newSkills.muscleMass + Math.max(1, Math.round(h.muscleGain * scale)));
-      }
-      happinessDelta += Math.max(1, Math.round(h.happinessGain * scale));
-      healthDelta += Math.round(h.healthDelta * scale);
     }
   }
 
-  if (bonuses.homeMuscleBonus > 0) {
-    newSkills.muscleMass = clampStat(
-      newSkills.muscleMass + Math.max(1, Math.round(bonuses.homeMuscleBonus * scale))
-    );
-    newSkills.strength = clampStat(
-      newSkills.strength + Math.max(1, Math.round(bonuses.homeMuscleBonus * scale))
-    );
+  if (bonuses.homeMuscleBonus > 0 && newAge >= 6) {
+    newSkills.muscleMass = clampStat(newSkills.muscleMass + proRate(bonuses.homeMuscleBonus));
+    newSkills.strength = clampStat(newSkills.strength + proRate(bonuses.homeMuscleBonus));
   }
 
-  const activeFaction = FACTIONS_26.find((f) => f.id === state.activeFactionId);
+  const activeFaction = newAge >= 14 ? FACTIONS_26.find((f) => f.id === state.activeFactionId) : undefined;
   let factionIncome = 0;
   let factionNote = '';
   if (activeFaction) {
     if (activeFaction.monthlyBonusOrFee > 0) {
       factionIncome = Math.round(activeFaction.monthlyBonusOrFee * monthsPassed);
     }
-    if (activeFaction.riskPercent >= 25 && (newAge + nextMonth) % 3 === 0) {
+    if (activeFaction.riskPercent >= 25 && (newAge + nextMonth) % 3 === 0 && step !== 'day') {
       healthDelta -= 6;
       factionNote = ` Опасная потасовка в круге «${activeFaction.name}» стоила здоровья (-6).`;
     }
   }
 
-  const activeCareer = CAREERS_CATALOG.find((c) => c.id === state.currentCareerId);
+  // Stress > 80% drops productivity by 50%!
+  const highStressPenaltyMult = (state.stress || 0) > 80 ? 0.5 : 1.0;
+
+  const activeCareer = newAge >= 14 ? CAREERS_CATALOG.find((c) => c.id === state.currentCareerId) : undefined;
   const kpiBonusMult = 1 + (state.careerStats.kpiScore - 50) / 250;
   const annualCareerSalary = activeCareer
-    ? Math.round(activeCareer.annualSalary * state.city.economyMultiplier * kpiBonusMult)
-    : newAge < 7
-    ? 250
+    ? Math.round(
+        activeCareer.annualSalary *
+          state.city.economyMultiplier *
+          kpiBonusMult *
+          pcStats.totalCareerTechMultiplier *
+          highStressPenaltyMult
+      )
     : newAge < 18
-    ? 600
-    : 1800;
+    ? 0
+    : Math.round(1800 * state.city.economyMultiplier * highStressPenaltyMult);
 
-  const activePolPos = POLITICAL_POSITIONS.find((p) => p.id === state.politicalPositionId);
+  // Military & Frontline pay
+  const monthlyMilitaryPay = state.militaryServiceActive
+    ? state.frontlineActive
+      ? 2400
+      : 950
+    : 0;
+  const periodMilitaryIncome = Math.round(monthlyMilitaryPay * monthsPassed);
+
+  const activePolPos = newAge >= 21 ? POLITICAL_POSITIONS.find((p) => p.id === state.politicalPositionId) : undefined;
   const annualPolSalary = activePolPos ? Math.round(activePolPos.annualSalary * state.city.economyMultiplier) : 0;
-  const gainedInfluence = activePolPos ? Math.max(1, Math.round(activePolPos.influencePerMonth * monthsPassed)) : 0;
+  const gainedInfluence = activePolPos ? proRate(activePolPos.influencePerMonth * 12) : 0;
 
-  const periodCareerIncome = Math.round(((annualCareerSalary + annualPolSalary) / 12) * monthsPassed);
-  const periodBusinessProfit = Math.round(bizSummary.netMonthlyProfit * monthsPassed);
+  const periodCareerIncome =
+    Math.round(((annualCareerSalary + annualPolSalary) / 12) * monthsPassed) + periodMilitaryIncome;
+  const periodBusinessProfit =
+    newAge >= 18 ? Math.round(bizSummary.netMonthlyProfit * monthsPassed * highStressPenaltyMult) : 0;
   const newSubscribers = state.urbexSubscribers + followersGain;
   const periodMediaIncome =
-    newAge >= 10
+    newAge >= 12
       ? Math.round(((newSubscribers * 0.35 * bonuses.house.blogGrowthBonus) / 12) * monthsPassed)
       : 0;
-  const periodDividends = Math.round(
-    (calculateAnnualInvestmentYield(state.investments, newSkills.finance) / 12) * monthsPassed
-  );
-  const periodRental = Math.round((bonuses.rentalAnnualIncome / 12) * monthsPassed);
+  const periodDividends =
+    newAge >= 18
+      ? Math.round((calculateAnnualInvestmentYield(state.investments, newSkills.finance) / 12) * monthsPassed)
+      : 0;
+  const periodRental = newAge >= 18 ? Math.round((bonuses.rentalAnnualIncome / 12) * monthsPassed) : 0;
   const periodExpenses = Math.round(expenses.total * monthsPassed);
 
   // Pocket money from parents for ages 7 to 17
@@ -1360,9 +1506,9 @@ export function advanceTurnByStep(state: PlayerState, stepOverride?: TurnStepMod
     pocketMoneyMonthly = Math.round(Math.min(300, Math.max(30, familyIncome * 0.04)) * gradeMultiplier);
   }
   const periodPocketMoney = Math.round(pocketMoneyMonthly * monthsPassed);
-  const periodBlogIncome = Math.round((state.blogAdRevenue || 0) * monthsPassed);
+  const periodBlogIncome = newAge >= 12 ? Math.round((state.blogAdRevenue || 0) * monthsPassed) : 0;
 
-  const netCashflow =
+  let netCashflow =
     periodCareerIncome +
     periodBusinessProfit +
     periodMediaIncome +
@@ -1374,26 +1520,137 @@ export function advanceTurnByStep(state: PlayerState, stepOverride?: TurnStepMod
     periodBlogIncome -
     periodExpenses;
 
-  const nextMoney = Math.round(state.money + netCashflow);
+  // Tax audit enforcement when taxScrutiny >= 80
+  let nextShadowIncome = state.shadowIncome || 0;
+  let nextTaxScrutiny = state.taxScrutiny || 0;
+  let taxAuditNote = '';
+  if (nextTaxScrutiny >= 80 && nextShadowIncome > 0 && monthsPassed >= 1) {
+    const taxFine = Math.round(nextShadowIncome * 0.35);
+    netCashflow -= taxFine;
+    nextShadowIncome = Math.max(0, nextShadowIncome - taxFine);
+    nextTaxScrutiny = 30;
+    taxAuditNote = ` [НАЛОГОВАЯ ПРОВЕРКА] Налоговая служба выявила теневые доходы и взыскала штраф -${formatMoney(taxFine, state.currency)}!`;
+  }
 
-  // Stress dynamics
+  let nextMoney = Math.round(state.money + netCashflow);
+
+  // === HARDCORE SURVIVAL BLOCK 1: STRESS, DEBT SPIRAL, HUNGER & ILLNESSES ===
   let stressDelta = 0;
-  if (activeCareer) stressDelta += Math.round(3 * scale);
-  if (state.focus === 'Учёба' && newAge >= 14) stressDelta += Math.round(2 * scale);
-  if (bonuses.house.energyRecoveryBonus > 0) stressDelta -= Math.round(bonuses.house.energyRecoveryBonus * 0.5 * scale);
-  if (!activeCareer && newAge >= 18) stressDelta -= Math.round(3 * scale);
+  if (activeCareer) stressDelta += proRate(14);
+  if (effectiveFocus === 'Учёба' && newAge >= 12) stressDelta += proRate(10);
+  if (state.militaryServiceActive) {
+    stressDelta += proRate(state.frontlineActive ? 26 : 14);
+  }
+  if (bonuses.house.energyRecoveryBonus > 0 && !state.frontlineActive) {
+    stressDelta -= proRate(Math.round(bonuses.house.energyRecoveryBonus * 1.5));
+  }
+  if (!activeCareer && !state.militaryServiceActive && newAge >= 18 && nextMoney >= 0) {
+    stressDelta -= proRate(8);
+  }
+
+  // 1A. Hardcore Debt Loop (Долговая яма): Collectors (+15 Stress), Late Penalties, Eviction
+  let nextDelinquencyTurns = state.debtDelinquencyTurns || 0;
+  let nextActiveHouseId = state.activeHouseId;
+  if (nextMoney < 0 && newAge >= 18) {
+    nextDelinquencyTurns += 1;
+    const lateFee = Math.max(75, Math.round(Math.abs(nextMoney) * 0.08 * Math.min(2, monthsPassed)));
+    nextMoney -= lateFee;
+    stressDelta += 15; // Collectors calling every turn!
+    happinessDelta -= Math.max(6, proRate(16));
+    healthDelta -= Math.max(4, proRate(10));
+    survivalNotes += ` 📞 [ДОЛГОВАЯ ЯМА · Просрочка ${nextDelinquencyTurns} х.] Коллекторы оборвали телефон (+15 Стресс, пени -${formatMoney(lateFee, state.currency)})!`;
+
+    if (nextDelinquencyTurns >= 2 && nextActiveHouseId !== 'parents_home') {
+      nextActiveHouseId = 'parents_home';
+      healthDelta -= 10;
+      happinessDelta -= 14;
+      survivalNotes += ` 🏚️ За долги счета арестованы, аренда жилья заблокирована — вы лишились крыши над головой (-10 Здоровье, -14 Счастье)!`;
+    }
+  } else if (nextMoney >= 0) {
+    nextDelinquencyTurns = 0;
+  }
+
+  // 1B. Hunger / Food Austerity (Голод / Жесткая экономия на еде)
+  let hungerWeightPenalty = 0;
+  if (state.spendingMode === 'Экономный' && newAge >= 16) {
+    const muscleLoss = Math.max(1, Math.round(2 * Math.min(2, monthsPassed)));
+    const healthLoss = Math.max(2, Math.round(5 * Math.min(2, monthsPassed)));
+    newSkills.muscleMass = clampStat(newSkills.muscleMass - muscleLoss);
+    healthDelta -= healthLoss;
+    stressDelta += Math.max(4, proRate(8));
+    hungerWeightPenalty = 3;
+    survivalNotes += ` 🍞 [Голод / Экономия на еде] Дефицит питания истощает организм (-${muscleLoss} Мышцы, -${healthLoss} Здоровье, потеря веса).`;
+  }
+
+  // 1C. Winter Pneumonia Risk without warm seasonal protection
+  const hasWarmWinterClothes =
+    bonuses.hasWeatherProtection ||
+    Boolean(state.equippedSuitId) ||
+    state.militaryServiceActive ||
+    newAge < 6;
+  const deterministicRoll = Math.abs(newAge * 37 + nextMonth * 13 + nextDay * 7 + Math.round(nextMoney)) % 100;
+
+  if (
+    seasonByMonth === 'Зима' &&
+    !hasWarmWinterClothes &&
+    !nextIllnesses.includes('Пневмония (переохлаждение зимой)') &&
+    deterministicRoll < 45
+  ) {
+    nextIllnesses.push('Пневмония (переохлаждение зимой)');
+    healthDelta -= 10;
+    survivalNotes += ` ❄️ [ПНЕВМОНИЯ!] Вы ходили зимой без тёплой одежды по сезону и свалились с тяжёлой пневмонией (-10 Здоровье)!`;
+  }
+
+  // 1D. Gym Ligament Tear Risk at low Energy (high Stress >= 60)
+  if (
+    effectiveFocus === 'Спорт и Сила' &&
+    (state.stress || 0) >= 60 &&
+    !nextIllnesses.includes('Надрыв связок плеча') &&
+    deterministicRoll < 42
+  ) {
+    nextIllnesses.push('Надрыв связок плеча');
+    healthDelta -= 8;
+    survivalNotes += ` 🏋️ [ТРАВМА В СПОРТЗАЛЕ!] На фоне низкой Бодрости вы надорвали связки плеча на тяжёлом жиме (-8 Здоровье)!`;
+  }
+
+  // 1E. Frontline Combat Wound / Concussion Risk
+  if (
+    state.militaryServiceActive &&
+    state.frontlineActive &&
+    !nextIllnesses.includes('Боевая контузия') &&
+    deterministicRoll < 35
+  ) {
+    nextIllnesses.push('Боевая контузия');
+    healthDelta -= 12;
+    stressDelta += 14;
+    survivalNotes += ` 💥 [ПЕРЕДОВАЯ] Близкий прилёт у блиндажа вызвал контузию (-12 Здоровье, +14 Стресс)!`;
+  }
+
+  // Ongoing health drain from untreated chronic illnesses / injuries
+  if (nextIllnesses.length > 0) {
+    const illnessDrain = Math.max(3, Math.round(nextIllnesses.length * 5 * Math.min(2, monthsPassed)));
+    healthDelta -= illnessDrain;
+    survivalNotes += ` 🤒 Невылеченные недуги (${nextIllnesses.join(', ')}) отнимают силы (-${illnessDrain} Здоровье). Обратитесь в клинику!`;
+  }
+
   const nextStress = clampStat((state.stress || 0) + stressDelta);
 
-  // Injury recovery
-  let nextInjury = state.hasInjury || false;
-  let nextInjuryTurns = state.injuryTurnsLeft || 0;
-  if (nextInjury && nextInjuryTurns > 0) {
-    nextInjuryTurns -= 1;
-    if (nextInjuryTurns <= 0) {
-      nextInjury = false;
-      nextInjuryTurns = 0;
-    }
+  // 1F. Critical Stress > 80%: Panic attacks, Insomnia (-25 Energy), Outbursts on family (-6 Relations)
+  let burnoutNote = '';
+  if (nextStress > 80) {
+    healthDelta -= Math.max(4, proRate(12));
+    happinessDelta -= Math.max(6, proRate(16));
+    relationsDelta -= 6;
+    burnoutNote =
+      ' 🧠 [КРИТИЧЕСКИЙ СТРЕСС > 80%!] Панические атаки, бессонница (-25 Энергии/Бодрости), падение продуктивности на 50% и срывы на близких (-6 Отношения)!';
   }
+
+  // Injury visual flag stays active if player has untreated illnesses or injuryTurnsLeft > 0
+  let nextInjuryTurns = state.injuryTurnsLeft || 0;
+  if (nextInjuryTurns > 0) {
+    nextInjuryTurns = Math.max(0, nextInjuryTurns - 1);
+  }
+  const nextInjury = nextInjuryTurns > 0 || nextIllnesses.length > 0;
 
   const nextPetCooldown = Math.max(0, (state.petRequestCooldown || 0) - (monthsPassed >= 1 ? 1 : 0));
 
@@ -1415,8 +1672,16 @@ export function advanceTurnByStep(state: PlayerState, stepOverride?: TurnStepMod
       : newAge < 18
       ? 22 + (newAge - 6) * 3.6
       : 66;
-  const nextWeightKg = Math.round(
-    baseWeight + (newAge >= 12 ? newSkills.muscleMass * 0.38 : newSkills.muscleMass * 0.08)
+  const formulaWeightKg = Math.round(
+    baseWeight +
+      (newAge >= 12 ? newSkills.muscleMass * 0.38 : newSkills.muscleMass * 0.08) -
+      hungerWeightPenalty
+  );
+  const nextWeightKg = Math.max(
+    3,
+    hungerWeightPenalty > 0 && yearsIncrement === 0
+      ? Math.min(formulaWeightKg, state.weightKg - hungerWeightPenalty)
+      : formulaWeightKg
   );
 
   const updatedFamily =
@@ -1432,11 +1697,6 @@ export function advanceTurnByStep(state: PlayerState, stepOverride?: TurnStepMod
           };
         })
       : state.family;
-
-  if (nextMoney < 0) {
-    happinessDelta -= 6;
-    healthDelta -= 4;
-  }
 
   const nextHealth = clampStat(state.health + healthDelta);
   const nextHappiness = clampStat(state.happiness + happinessDelta);
@@ -1460,7 +1720,7 @@ export function advanceTurnByStep(state: PlayerState, stepOverride?: TurnStepMod
   let milestoneNote = '';
   if (yearsIncrement > 0) {
     if (newAge === 1) milestoneNote = ' Вы сделали свои первые шаги и произнесли первое слово!';
-    if (newAge === 6) milestoneNote = ` Вы пошли в 1-й класс («${state.secondarySchoolName}»)!`;
+    if (newAge === 6) milestoneNote = ` Вы пошли в 1-й класс («${state.secondarySchoolName}»)! Фокус переключён на «Учёба».`;
     if (newAge === 17)
       milestoneNote = ` Вы окончили школу со средним баллом аттестата ${nextSchoolGrade.toFixed(1)}/12! Открыто поступление в Топ-10 ВУЗов стран мира.`;
   }
@@ -1472,8 +1732,8 @@ export function advanceTurnByStep(state: PlayerState, stepOverride?: TurnStepMod
     dateLabel: stepLabel,
     season: seasonByMonth,
     weather,
-    text: `[${stepLabel}] Погода: ${weather} (${seasonByMonth}). Итог за ход: ${cashStr} (счета: -${expStr}${bizStr}).${milestoneNote}${factionNote}`,
-    starred: Boolean(milestoneNote),
+    text: `[${stepLabel}] Погода: ${weather} (${seasonByMonth}). Итог за ход: ${cashStr} (счета: -${expStr}${bizStr}).${milestoneNote}${factionNote}${survivalNotes}${burnoutNote}${taxAuditNote}`,
+    starred: Boolean(milestoneNote || burnoutNote || taxAuditNote || survivalNotes),
     category: 'life' as const,
   };
 
@@ -1483,13 +1743,14 @@ export function advanceTurnByStep(state: PlayerState, stepOverride?: TurnStepMod
     ? isBankrupt
       ? 'Полное финансовое банкротство: долги по счетам превысили критический порог (-12 000).'
       : nextHealth <= 0
-      ? 'Критический упадок здоровья и перегрузка организма.'
+      ? 'Критический упадок здоровья от невылеченных травм, болезней и перегрузки организма.'
       : 'Долгая и насыщенная жизнь подошла к столетнему рубежу.'
     : undefined;
 
   const updatedState: PlayerState = {
     ...state,
     age: newAge,
+    focus: effectiveFocus,
     currentYear: newYear,
     monthOfYear: nextMonth,
     dayOfMonth: nextDay,
@@ -1508,6 +1769,7 @@ export function advanceTurnByStep(state: PlayerState, stepOverride?: TurnStepMod
     schoolGradeAvg: nextSchoolGrade,
     languages: nextLanguages,
     family: updatedFamily,
+    activeHouseId: nextActiveHouseId,
     careerStats: {
       ...state.careerStats,
       totalShiftsWorked: state.careerStats.totalShiftsWorked + (activeCareer ? 1 : 0),
@@ -1520,17 +1782,39 @@ export function advanceTurnByStep(state: PlayerState, stepOverride?: TurnStepMod
     isAlive,
     causeOfEnd,
     stress: nextStress,
+    shadowIncome: nextShadowIncome,
+    taxScrutiny: nextTaxScrutiny,
     hasInjury: nextInjury,
     injuryTurnsLeft: nextInjuryTurns,
+    activeIllnesses: nextIllnesses,
+    debtDelinquencyTurns: nextDelinquencyTurns,
     petRequestCooldown: nextPetCooldown,
     pocketMoneyPerMonth: pocketMoneyMonthly,
   };
 
   // Check seasonal & holiday events
-  let stateWithSeasonal = checkAndGenerateSeasonalEvent(updatedState);
+  const stateWithSeasonal = checkAndGenerateSeasonalEvent(updatedState);
 
-  if (!stateWithSeasonal.activePendingEvent && yearsIncrement > 0 && (newAge % 2 === 0 || newAge === 1 || newAge === 6 || newAge === 15)) {
-    stateWithSeasonal.activePendingEvent = generateContextualAiLifeEvent(stateWithSeasonal);
+  // 55% Auto-Trigger probability on turn step (with 35-turn non-repeating history)
+  const autoRoll =
+    Math.abs(newAge * 41 + newYear * 17 + nextMonth * 23 + nextDay * 11 + stateWithSeasonal.chronicle.length * 13) %
+    100;
+  if (
+    !stateWithSeasonal.activePendingEvent &&
+    (yearsIncrement > 0 || stateWithSeasonal.militaryServiceActive || autoRoll < 55)
+  ) {
+    const generatedEv = generateContextualAiLifeEvent(stateWithSeasonal);
+    stateWithSeasonal.activePendingEvent = generatedEv;
+    const prevUsed = Array.isArray(stateWithSeasonal.usedEventIds) ? stateWithSeasonal.usedEventIds : [];
+    stateWithSeasonal.usedEventIds = [...prevUsed.filter((id) => id !== generatedEv.id), generatedEv.id].slice(-35);
+  }
+
+  // Proactive Incoming NPC Messenger Chat (NPCs write first!) when age >= 6
+  if (!stateWithSeasonal.activeIncomingNpcChat && newAge >= 6 && autoRoll % 3 === 0) {
+    const npcThread = pickProactiveNpcChat(stateWithSeasonal);
+    stateWithSeasonal.activeIncomingNpcChat = npcThread;
+    const prevUsed = Array.isArray(stateWithSeasonal.usedEventIds) ? stateWithSeasonal.usedEventIds : [];
+    stateWithSeasonal.usedEventIds = [...prevUsed.filter((id) => id !== npcThread.id), npcThread.id].slice(-35);
   }
 
   stateWithSeasonal.quests = syncQuestsProgress(stateWithSeasonal);
@@ -1562,141 +1846,376 @@ export function appendAiMemory(
   };
 }
 
-// Embedded Anti-Hallucination Persistent AI Event Generator (Remembers Before & After, Age & Era Grounded)
+// Embedded Anti-Hallucination Persistent AI Event Generator (100% Offline, Multi-Scenario, Non-Repeating, Age & Era Grounded)
 export function generateContextualAiLifeEvent(state: PlayerState): LifeEventTemplate {
+  const recentEntries = state.aiMemory.entries.slice(0, 2);
   const prevMemory =
-    state.aiMemory.entries[0]?.consequenceSummary ||
-    `Вы живёте в г. ${state.city.name} (${state.city.country}).`;
+    recentEntries.length > 0
+      ? recentEntries
+          .map((e) => `${e.actionTaken} → ${e.consequenceSummary}`)
+          .join(' | ')
+      : `Вы живёте в г. ${state.city.name} (${state.city.country}).`;
   const motherName = state.family[0]?.name || 'Мама';
   const fatherName = state.family[1]?.name || 'Папа';
-
-  // Stage 1: Infancy & Early Childhood (Age 0 - 5)
-  if (state.age <= 5) {
-    return {
-      id: `ai_child_${state.age}_${state.currentYear}`,
-      title: `Раннее детство (${state.age} лет · ${state.currentYear} г.): Развитие с родителями`,
-      description: `[Память ИИ: ${prevMemory}] В г. ${state.city.name} ваши родители (${motherName} и ${fatherName}) замечают ваш интерес к окружающему миру. Какую игрушку или занятие вы выбираете?`,
-      minAge: 0,
-      maxAge: 5,
-      weatherCondition: 'any',
-      seasonCondition: 'any',
-      careerCondition: 'any',
-      choices: [
-        {
-          label: 'Собирать конструктор и листать детские книжки (+Знания, +Интеллект)',
-          outcomeText: `Вы часами собирали сложные фигуры. Родители в восторге от вашей смышлёности!`,
-          nextStoryArc: 'Глава: Любознательный ребёнок',
-          knowledgeDelta: 8,
-          happinessDelta: 6,
-          skillKey: 'intellect',
-          skillDelta: 6,
-        },
-        {
-          label: 'Активно бегать во дворе и лазать по детской площадке (+Здоровье, +Атлетизм)',
-          outcomeText: `Вы росли невероятно подвижным и крепким ребёнком в г. ${state.city.name}!`,
-          nextStoryArc: 'Глава: Неутомимая энергия детства',
-          healthDelta: 6,
-          happinessDelta: 7,
-          skillKey: 'fitness',
-          skillDelta: 6,
-        },
-      ],
-    };
-  }
-
-  // Stage 2: School Years (Age 6 - 17)
-  if (state.age <= 17) {
-    if (state.age >= 13 && state.age % 3 === 0) {
-      const peerEv =
-        PEER_PRESSURE_EVENTS_CATALOG[state.age % PEER_PRESSURE_EVENTS_CATALOG.length];
-      if (peerEv) return peerEv;
+  const siblingName = state.family[2]?.name || 'Старший брат/сестра';
+  const recentIds = new Set<string>([
+    state.aiMemory.lastEventId || '',
+    ...(state.usedEventIds || []).slice(-35),
+    ...state.aiMemory.entries.slice(0, 12).map((e) => e.id),
+  ]);
+  const recentActions = state.aiMemory.entries.slice(0, 4).map((e) => e.actionTaken);
+  const pickNonRepeating = (pool: LifeEventTemplate[]): LifeEventTemplate => {
+    const fresh = pool.filter(
+      (ev) =>
+        !recentIds.has(ev.id) &&
+        !recentActions.some((act) => act.includes(ev.title))
+    );
+    const candidates = fresh.length > 0 ? fresh : pool.filter((ev) => ev.id !== state.aiMemory.lastEventId);
+    const finalPool = candidates.length > 0 ? candidates : pool;
+    const seed =
+      state.age * 31 +
+      state.currentYear * 7 +
+      state.monthOfYear * 13 +
+      state.dayOfMonth * 5 +
+      state.aiMemory.entries.length * 19 +
+      state.chronicle.length * 7;
+    const chosen = finalPool[Math.abs(seed) % finalPool.length];
+    if (!chosen.description.includes('[Память ИИ:')) {
+      return {
+        ...chosen,
+        description: `[Память ИИ: ${prevMemory}] ${chosen.description}`,
+      };
     }
+    return chosen;
+  };
 
-    return {
-      id: `ai_school_${state.age}_${state.currentYear}`,
-      title: `Школьная развилка (${state.age} лет · Ср. балл ${state.schoolGradeAvg.toFixed(1)}/12)`,
-      description: `[Память ИИ: ${prevMemory}] В школе «${state.secondarySchoolName}» (г. ${state.city.name}, ${state.currentYear} г.) объявлена профильная олимпиада и набор в спортивную сборную.`,
-      minAge: 6,
-      maxAge: 17,
+  // Stage 1A: Infancy & Toddlerhood (Age 0 - 2)
+  if (state.age <= 2) {
+    const infantPool: LifeEventTemplate[] = [
+      {
+        id: `ai_infant_blocks_${state.age}`,
+        title: `Младенчество (${state.age} лет · ${state.currentYear} г.): Развивающие кубики`,
+        description: `[Память ИИ: ${prevMemory}] В детской комнате в г. ${state.city.name} ${motherName} и ${fatherName} раскладывают перед вами яркие кубики и музыкальную книжку.`,
+        minAge: 0,
+        maxAge: 2,
+        weatherCondition: 'any',
+        seasonCondition: 'any',
+        careerCondition: 'any',
+        choices: [
+          {
+            label: 'Тянуться к книжке с картинками и складывать башню (+Знания, +Интеллект)',
+            outcomeText: `Вы удивили родителей своей усидчивостью и быстро запомнили цвета и формы!`,
+            nextStoryArc: 'Глава: Смышлёный малыш',
+            knowledgeDelta: 7,
+            happinessDelta: 6,
+            skillKey: 'intellect',
+            skillDelta: 6,
+          },
+          {
+            label: 'Весело ползать наперегонки и смеяться (+Здоровье, +Счастье, +Выносливость)',
+            outcomeText: `Ваша неуёмная энергия наполнила дом в г. ${state.city.name} радостным смехом!`,
+            nextStoryArc: 'Глава: Бодрый и крепкий малыш',
+            healthDelta: 7,
+            happinessDelta: 8,
+            skillKey: 'fitness',
+            skillDelta: 6,
+          },
+        ],
+      },
+      {
+        id: `ai_infant_walk_${state.age}`,
+        title: `Прогулка в парке г. ${state.city.name} (${state.season}, ${state.weather})`,
+        description: `[Память ИИ: ${prevMemory}] Родители вышли с вами на прогулку по скверу г. ${state.city.name}. Вокруг шумят деревья и гуляют другие семьи.`,
+        minAge: 0,
+        maxAge: 2,
+        weatherCondition: 'any',
+        seasonCondition: 'any',
+        careerCondition: 'any',
+        choices: [
+          {
+            label: 'Делать уверенные шаги за руку с папой (+Сила, +Здоровье)',
+            outcomeText: `${fatherName} с гордостью поддерживал вас — ваши ножки окрепли на свежем воздухе!`,
+            nextStoryArc: 'Глава: Первые уверенные шаги',
+            healthDelta: 8,
+            relationsDelta: 6,
+            skillKey: 'strength',
+            skillDelta: 5,
+          },
+          {
+            label: 'Улыбаться прохожим и лепетать первые слова (+Харизма, +Отношения)',
+            outcomeText: `Вы очаровали всю семью и соседей своим звонким голосом и улыбкой!`,
+            nextStoryArc: 'Глава: Душа семьи с пелёнок',
+            happinessDelta: 8,
+            relationsDelta: 9,
+            skillKey: 'charisma',
+            skillDelta: 6,
+          },
+        ],
+      },
+      {
+        id: `ai_infant_family_evening_${state.age}`,
+        title: `Тёплый семейный вечер (${state.age} лет · г. ${state.city.name})`,
+        description: `[Память ИИ: ${prevMemory}] Вечером ${motherName}, ${fatherName} и ${siblingName} собрались в гостиной.`,
+        minAge: 0,
+        maxAge: 2,
+        weatherCondition: 'any',
+        seasonCondition: 'any',
+        careerCondition: 'any',
+        choices: [
+          {
+            label: 'Слушать сказку и повторять слоги за мамой (+Знания, +Речь)',
+            outcomeText: `${motherName} читала вам сказки, и вы произнесли новое чёткое слово!`,
+            nextStoryArc: 'Глава: Раннее развитие речи',
+            knowledgeDelta: 8,
+            relationsDelta: 7,
+            skillKey: 'intellect',
+            skillDelta: 5,
+          },
+          {
+            label: 'Играть в прятки с братом/сестрой (+Счастье, +Творчество)',
+            outcomeText: `Вы весело хохотали вместе с ${siblingName}, укрепляя семейную дружбу!`,
+            nextStoryArc: 'Глава: Дружная семья',
+            happinessDelta: 9,
+            relationsDelta: 8,
+            skillKey: 'creativity',
+            skillDelta: 5,
+          },
+        ],
+      },
+    ];
+    return pickNonRepeating(infantPool);
+  }
+
+  // Stage 1B: Preschool Childhood (Age 3 - 5)
+  if (state.age <= 5) {
+    const preschoolPool: LifeEventTemplate[] = [
+      {
+        id: `ai_preschool_kindergarten_${state.age}`,
+        title: `Детский сад и первые друзья (${state.age} лет · г. ${state.city.name})`,
+        description: `[Память ИИ: ${prevMemory}] В детском саду г. ${state.city.name} воспитатель предложил ребятам командную игру и конкурс рисунков.`,
+        minAge: 3,
+        maxAge: 5,
+        weatherCondition: 'any',
+        seasonCondition: 'any',
+        careerCondition: 'any',
+        choices: [
+          {
+            label: 'Нарисовать яркую картину и показать всей группе (+Творчество, +Счастье)',
+            outcomeText: `Ваш рисунок повесили на почётном стенде, а ${motherName} сохранила его на память!`,
+            nextStoryArc: 'Глава: Юный художник и фантазёр',
+            happinessDelta: 8,
+            knowledgeDelta: 6,
+            skillKey: 'creativity',
+            skillDelta: 7,
+          },
+          {
+            label: 'Собрать ребят и построить большую крепость из конструктора (+Харизма, +Интеллект)',
+            outcomeText: `Дети выбрали вас капитаном постройки — у вас появились первые верные друзья!`,
+            nextStoryArc: 'Глава: Лидер детской группы',
+            relationsDelta: 9,
+            knowledgeDelta: 7,
+            skillKey: 'charisma',
+            skillDelta: 7,
+          },
+        ],
+      },
+      {
+        id: `ai_preschool_yard_${state.age}`,
+        title: `Дворовые игры и подготовка к школе (${state.age} лет)`,
+        description: `[Память ИИ: ${prevMemory}] ${fatherName} подарил вам детскую энциклопедию с буквами и мяч для игр во дворе.`,
+        minAge: 3,
+        maxAge: 5,
+        weatherCondition: 'any',
+        seasonCondition: 'any',
+        careerCondition: 'any',
+        choices: [
+          {
+            label: 'Учить алфавит и считать в уме с родителями (+Знания, +Интеллект)',
+            outcomeText: `К удивлению родителей, вы научились бегло читать простые слова ещё до 1-го класса!`,
+            nextStoryArc: 'Глава: Готов к школе на отлично',
+            knowledgeDelta: 10,
+            happinessDelta: 5,
+            skillKey: 'intellect',
+            skillDelta: 8,
+          },
+          {
+            label: 'Гонять мяч и подтягиваться на детской лесенке (+Здоровье, +Сила)',
+            outcomeText: `Вы стали самым быстрым и ловким ребёнком в своём дворе г. ${state.city.name}!`,
+            nextStoryArc: 'Глава: Спортивный характер с детства',
+            healthDelta: 8,
+            happinessDelta: 7,
+            skillKey: 'strength',
+            skillDelta: 7,
+          },
+        ],
+      },
+      {
+        id: `ai_preschool_curiosity_${state.age}`,
+        title: `Детское открытие в ${state.season} (${state.age} лет · ${state.currentYear} г.)`,
+        description: `[Память ИИ: ${prevMemory}] Во время семейной прогулки по г. ${state.city.name} вы заинтересовались тем, как устроены городские поезда и мосты.`,
+        minAge: 3,
+        maxAge: 5,
+        weatherCondition: 'any',
+        seasonCondition: 'any',
+        careerCondition: 'any',
+        choices: [
+          {
+            label: 'Засыпать папу вопросами об инженерии и технике (+Интеллект, +Отношения)',
+            outcomeText: `${fatherName} подробно рассказал вам о механике и подарил детский набор исследователя!`,
+            nextStoryArc: 'Глава: Юный исследователь',
+            knowledgeDelta: 9,
+            relationsDelta: 7,
+            skillKey: 'intellect',
+            skillDelta: 7,
+          },
+          {
+            label: 'Устроить весёлый семейный пикник в парке (+Счастье, +Здоровье)',
+            outcomeText: `Тёплый день с семьёй оставил незабываемые детские воспоминания!`,
+            nextStoryArc: 'Глава: Счастливое детство в семье',
+            healthDelta: 6,
+            happinessDelta: 10,
+            relationsDelta: 8,
+            skillKey: 'fitness',
+            skillDelta: 5,
+          },
+        ],
+      },
+    ];
+    return pickNonRepeating(preschoolPool);
+  }
+
+  // PRIORITY 1: Military & Frontline Duty (18+ years when in army or at war)
+  const activeCareer = state.currentCareerId
+    ? CAREERS_CATALOG.find((c) => c.id === state.currentCareerId) || null
+    : null;
+  const isMilitaryRole =
+    state.militaryServiceActive ||
+    Boolean(state.frontlineActive) ||
+    Boolean(
+      activeCareer &&
+        (activeCareer.title.toLowerCase().includes('военн') ||
+          activeCareer.title.toLowerCase().includes('офицер') ||
+          activeCareer.title.toLowerCase().includes('спецназ'))
+    );
+
+  if (state.age >= 18 && isMilitaryRole) {
+    return pickNonRepeating(buildMilitaryFrontlineEvents(state));
+  }
+
+  // PRIORITY 2: IT, Software Engineering & Tech Career/Focus (Age 16+)
+  const isItRole =
+    state.age >= 16 &&
+    Boolean(
+      (activeCareer &&
+        (activeCareer.category === 'tech_engineering' ||
+          activeCareer.sector.toLowerCase().includes('it') ||
+          activeCareer.title.toLowerCase().includes('разработ') ||
+          activeCareer.title.toLowerCase().includes('программист') ||
+          activeCareer.title.toLowerCase().includes('devops') ||
+          activeCareer.title.toLowerCase().includes('data'))) ||
+        (state.customPcBuild.cpu && state.customPcBuild.gpu && state.focus === 'Карьера')
+    );
+
+  if (isItRole) {
+    return pickNonRepeating(buildItDevEvents(state));
+  }
+
+  // PRIORITY 3: Business Empire, Resell & Corporate Management (Age 18+)
+  const isBusinessRole =
+    state.age >= 18 &&
+    (state.ownedBusinesses.length > 0 ||
+      state.focus === 'Бизнес и Политика' ||
+      state.focus === 'Инвестиции' ||
+      Boolean(activeCareer && activeCareer.category === 'finance_exec'));
+
+  if (isBusinessRole) {
+    return pickNonRepeating(buildBusinessCorporateEvents(state));
+  }
+
+  // PRIORITY 4: Blogging, Urbex & Media Production (Age 12+)
+  const isBloggingMediaRole =
+    state.age >= 12 &&
+    (state.focus === 'Медиа и Музыка' ||
+      state.focus === 'Уберэкс' ||
+      (state.blogPostsCount || 0) >= 2 ||
+      state.urbexSubscribers >= 800 ||
+      Boolean(activeCareer && activeCareer.category === 'creative_media'));
+
+  if (isBloggingMediaRole) {
+    return pickNonRepeating(buildBloggingMediaEvents(state));
+  }
+
+  // PRIORITY 5: Education — School, College & University (Age 6–24 or Focus 'Учёба')
+  if (state.age >= 6 && (state.age <= 17 || state.focus === 'Учёба')) {
+    const eduEvents = buildEducationStudyEvents(state);
+    if (state.age <= 11) {
+      return pickNonRepeating([
+        ...eduEvents.filter((e) => state.age >= e.minAge && state.age <= e.maxAge),
+      ]);
+    }
+    if (state.age <= 17) {
+      return pickNonRepeating([
+        ...eduEvents.filter((e) => state.age >= e.minAge && state.age <= e.maxAge),
+        ...PEER_PRESSURE_EVENTS_CATALOG.filter(
+          (ev) => state.age >= ev.minAge && state.age <= ev.maxAge
+        ),
+      ]);
+    }
+    return pickNonRepeating(eduEvents);
+  }
+
+  // Stage 3: General Adult Life (18+) — Grounded in Career, Business, Romance, Urbex & Catalog Events
+  const careerTitle = activeCareer?.title || 'Свободный специалист';
+  const mult = state.city.economyMultiplier;
+
+  const adultDynamicPool: LifeEventTemplate[] = [
+    ...state.customMods.filter((ev) => state.age >= ev.minAge && state.age <= ev.maxAge),
+    ...buildItDevEvents(state).slice(0, 3),
+    ...buildBusinessCorporateEvents(state).slice(0, 3),
+    ...buildBloggingMediaEvents(state).slice(0, 3),
+    ...CORE_EVENTS_CATALOG.filter((ev) => state.age >= ev.minAge && state.age <= ev.maxAge),
+    {
+      id: `ai_adult_contract_${state.age}`,
+      title: `Деловой прорыв в г. ${state.city.name} (${state.currentYear} г. · ${careerTitle})`,
+      description: `[Память ИИ: ${prevMemory}] Благодаря вашей репутации (${careerTitle}) международные партнёры в г. ${state.city.name} предлагают возглавить стратегическое направление.`,
+      minAge: 18,
+      maxAge: 100,
       weatherCondition: 'any',
       seasonCondition: 'any',
       careerCondition: 'any',
       choices: [
         {
-          label: 'Блестяще выступить на олимпиаде (+Школьный балл, +Интеллект, +Грант)',
-          outcomeText: `Вы заняли призовое место в г. ${state.city.name}! Учителя повысили ваш годовой балл аттестата.`,
-          nextStoryArc: 'Глава: Гордость школы и будущий абитуриент Топ-ВУЗа',
-          knowledgeDelta: 10,
-          happinessDelta: 6,
-          moneyDelta: 250,
-          skillKey: 'intellect',
+          label: 'Блестяще провести переговоры и подписать контракт (+Капитал, +Финансы)',
+          outcomeText: `Сделка закрыта на ваших условиях! Ваш счёт пополнился солидным бонусом.`,
+          nextStoryArc: `Глава: Лидер индустрии в г. ${state.city.name}`,
+          happinessDelta: 8,
+          knowledgeDelta: 6,
+          moneyDelta: Math.round(1850 * mult),
+          skillKey: 'finance',
           skillDelta: 8,
         },
         {
-          label: 'Выиграть турнир школьной сборной и стать душой компании (+Сила, +Харизма)',
-          outcomeText: `Весь класс болел за вас на трибунах! Ваша популярность и физическая форма выросли.`,
-          nextStoryArc: 'Глава: Лидер школы и спортплощадки',
-          healthDelta: 6,
+          label: 'Превратить проект в громкое медийное шоу (+Крупный гонорар, +Харизма, +Фанаты)',
+          outcomeText: `О вашем смелом решении написали главные паблики г. ${state.city.name}!`,
+          nextStoryArc: `Глава: Медийный триумф в г. ${state.city.name}`,
           happinessDelta: 10,
-          relationsDelta: 10,
-          skillKey: 'strength',
+          relationsDelta: 8,
+          moneyDelta: Math.round(2300 * mult),
+          followersDelta: 850,
+          skillKey: 'charisma',
           skillDelta: 8,
         },
       ],
-    };
-  }
+    },
+  ];
 
-  // Stage 3: Adult Life (18+) — Grounded in Career, Business, Romance, and Previous Memory
-  const allEvents = [...state.customMods, ...PEER_PRESSURE_EVENTS_CATALOG, ...CORE_EVENTS_CATALOG];
-  const matchingEvents = allEvents.filter((ev) => {
-    const ageOk = state.age >= ev.minAge && state.age <= ev.maxAge;
-    const notRepeated = ev.id !== state.aiMemory.lastEventId;
-    return ageOk && notRepeated;
-  });
-
-  if (matchingEvents.length > 0 && state.age % 4 === 0) {
-    return matchingEvents[(state.age + state.currentYear) % matchingEvents.length];
-  }
-
-  const careerTitle =
-    CAREERS_CATALOG.find((c) => c.id === state.currentCareerId)?.title || 'Свободный специалист';
-
-  return {
-    id: `ai_adult_${state.age}_${state.currentYear}`,
-    title: `Вызов судьбы в г. ${state.city.name} (${state.currentYear} г. · ${careerTitle})`,
-    description: `[Память ИИ до этого: ${prevMemory}] С учётом вашего прошлого выбора и опыта (${careerTitle}) вам поступает закрытое предложение от влиятельных людей г. ${state.city.name}.`,
-    minAge: 18,
-    maxAge: 100,
-    weatherCondition: 'any',
-    seasonCondition: 'any',
-    careerCondition: 'any',
-    choices: [
-      {
-        label: 'Возглавить легальный инновационный проект (+Доход, +Интеллект, +Репутация)',
-        outcomeText: `Вы блестяще применили свои знания в г. ${state.city.name} и заработали солидный гонорар!`,
-        nextStoryArc: `Глава: Триумф профессионала в г. ${state.city.name}`,
-        happinessDelta: 8,
-        knowledgeDelta: 6,
-        moneyDelta: Math.round(1800 * state.city.economyMultiplier),
-        skillKey: 'finance',
-        skillDelta: 8,
-      },
-      {
-        label: 'Рискнуть в жёсткой силовой и медийной игре (+Крупный куш, +Харизма, +Подписчики)',
-        outcomeText: `Ваша решительность ошеломила конкурентов! О вас заговорил весь ${state.city.name}.`,
-        nextStoryArc: `Глава: Дерзкий игрок г. ${state.city.name}`,
-        happinessDelta: 10,
-        relationsDelta: 8,
-        moneyDelta: Math.round(2400 * state.city.economyMultiplier),
-        followersDelta: 850,
-        skillKey: 'charisma',
-        skillDelta: 8,
-      },
-    ],
-  };
+  return pickNonRepeating(adultDynamicPool);
 }
 
 export function relocateToCity(state: PlayerState, targetCity: CityOption): PlayerState {
+  if (!getAgeGate('relocate', state.age).allowed) {
+    return state;
+  }
   if (state.money < targetCity.relocationCost || state.city.id === targetCity.id) {
     return state;
   }
@@ -1710,10 +2229,8 @@ export function relocateToCity(state: PlayerState, targetCity: CityOption): Play
     secondarySchoolName: secEdu.secondarySchoolName,
     localColleges: secEdu.localColleges,
     money: state.money - targetCity.relocationCost,
-    activeHouseId: state.activeHouseId === 'parents_home' ? 'suburb_studio' : state.activeHouseId,
-    ownedHouseIds: state.ownedHouseIds.includes('suburb_studio')
-      ? state.ownedHouseIds
-      : [...state.ownedHouseIds, 'suburb_studio'],
+    activeHouseId: state.activeHouseId,
+    ownedHouseIds: state.ownedHouseIds,
     aiMemory: appendAiMemory(
       state,
       `Переезд в г. ${targetCity.name} (${targetCity.country})`,
@@ -1780,14 +2297,43 @@ export function applyEventChoice(
   );
   updatedMemory.lastEventId = event.id;
 
+  const rawMoneyDelta = choice.moneyDelta || 0;
+  const effectiveMoneyDelta =
+    state.age < 6 ? 0 : state.age < 14 && rawMoneyDelta < 0 ? Math.max(-state.money, rawMoneyDelta) : rawMoneyDelta;
+  const effectiveFollowersDelta = state.age < 12 ? 0 : choice.followersDelta || 0;
+
+  let extraHealthDelta = choice.healthDelta || 0;
+  let extraInjuryNote = '';
+  const nextIllnesses = Array.isArray(state.activeIllnesses) ? [...state.activeIllnesses] : [];
+  let nextHasInjury = state.hasInjury;
+  let nextInjuryTurns = state.injuryTurnsLeft;
+
+  if (choice.injuryRiskPercent && choice.injuryRiskPercent > 0) {
+    const roll = Math.abs(state.age * 29 + state.dayOfMonth * 11 + state.chronicle.length * 7) % 100;
+    if (roll < choice.injuryRiskPercent) {
+      const illnessName = choice.illnessToAdd || 'Травма после рискованного решения';
+      if (!nextIllnesses.includes(illnessName)) {
+        nextIllnesses.push(illnessName);
+      }
+      extraHealthDelta -= 12;
+      nextHasInjury = true;
+      nextInjuryTurns = Math.max(nextInjuryTurns, 3);
+      extraInjuryNote = ` ⚠️ [ПОЛУЧЕНА ТРАВМА: ${illnessName} (-12 Здоровье)]`;
+    }
+  }
+
+  const nextMilitaryActive = choice.clearMilitaryService ? false : state.militaryServiceActive;
+  const nextFrontlineActive = choice.clearMilitaryService ? false : Boolean(state.frontlineActive);
+
   const nextState: PlayerState = {
     ...state,
-    health: clampStat(state.health + (choice.healthDelta || 0)),
+    health: clampStat(state.health + extraHealthDelta),
     happiness: clampStat(state.happiness + (choice.happinessDelta || 0)),
     knowledge: clampStat(state.knowledge + (choice.knowledgeDelta || 0)),
     relations: clampStat(state.relations + (choice.relationsDelta || 0)),
-    money: state.money + (choice.moneyDelta || 0),
-    urbexSubscribers: Math.max(0, state.urbexSubscribers + (choice.followersDelta || 0)),
+    stress: clampStat((state.stress || 0) + (choice.stressDelta || 0)),
+    money: state.money + effectiveMoneyDelta,
+    urbexSubscribers: Math.max(0, state.urbexSubscribers + effectiveFollowersDelta),
     skills: newSkills,
     habits: nextHabits,
     schoolGradeAvg: nextSchoolGrade,
@@ -1795,6 +2341,11 @@ export function applyEventChoice(
     storyHistory: nextHistory,
     aiMemory: updatedMemory,
     activePendingEvent: null,
+    hasInjury: nextHasInjury,
+    injuryTurnsLeft: nextInjuryTurns,
+    activeIllnesses: nextIllnesses,
+    militaryServiceActive: nextMilitaryActive,
+    frontlineActive: nextFrontlineActive,
     chronicle: [
       {
         id: `ev_${state.age}_${Date.now()}`,
@@ -1802,7 +2353,7 @@ export function applyEventChoice(
         year: state.currentYear,
         season: state.season,
         weather: state.weather,
-        text: `[Сюжет: ${event.title}] ${choice.outcomeText}${
+        text: `[Сюжет: ${event.title}] ${choice.outcomeText}${extraInjuryNote}${
           choice.nextStoryArc ? ` -> Новая глава: «${choice.nextStoryArc}»` : ''
         }`,
         starred: true,
@@ -1812,6 +2363,7 @@ export function applyEventChoice(
     ],
   };
 
+  nextState.monthlyExpenses = calculateMonthlyExpenses(nextState);
   nextState.quests = syncQuestsProgress(nextState);
   return nextState;
 }
@@ -1826,6 +2378,17 @@ export function executeUrbexExpedition(
   revenueGained: number;
   summaryText: string;
 } {
+  const urbexGate = getAgeGate('urbex', state.age);
+  if (!urbexGate.allowed) {
+    return {
+      nextState: state,
+      success: false,
+      subscribersGained: 0,
+      revenueGained: 0,
+      summaryText: urbexGate.reason,
+    };
+  }
+
   const bonuses = calculateActiveBonuses(state);
   const weatherMatch = state.weather === spot.weatherBonus ? 1.35 : 1.0;
   const totalUrbexPower =
@@ -1890,6 +2453,9 @@ export function studySchoolExtra(
   state: PlayerState,
   mode: 'homework' | 'tutor' | 'olympiad'
 ): PlayerState {
+  if (!getAgeGate('school', state.age).allowed || state.age > 18) {
+    return state;
+  }
   const cost = mode === 'homework' ? 0 : mode === 'tutor' ? 180 : 350;
   if (state.money < cost) return state;
 
@@ -1934,10 +2500,18 @@ export function studySchoolExtra(
   };
 }
 
+export function getLanguageCourseCost(state: { city: CityOption }, course: LanguageCourseItem): number {
+  return Math.round(course.price * Math.max(0.7, state.city.economyMultiplier * 0.85));
+}
+
 // Language Course Action (Advances CEFR level A1 -> A2 -> B1 -> B2 -> C1 -> C2)
 export function takeLanguageCourse(state: PlayerState, course: LanguageCourseItem): PlayerState {
+  if (!getAgeGate('language_course', state.age).allowed) {
+    return state;
+  }
   const currentLvl = state.languages[course.langCode] || 0;
-  if (currentLvl >= 6 || state.money < course.price) {
+  const effectivePrice = getLanguageCourseCost(state, course);
+  if (currentLvl >= 6 || state.money < effectivePrice) {
     return state;
   }
 
@@ -1946,7 +2520,7 @@ export function takeLanguageCourse(state: PlayerState, course: LanguageCourseIte
 
   return {
     ...state,
-    money: state.money - course.price,
+    money: state.money - effectivePrice,
     knowledge: clampStat(state.knowledge + course.intellectGain),
     skills: {
       ...state.skills,
@@ -1970,7 +2544,7 @@ export function takeLanguageCourse(state: PlayerState, course: LanguageCourseIte
         year: state.currentYear,
         season: state.season,
         weather: state.weather,
-        text: `[Языковые курсы] Вы прошли ступень курса «${course.langName}»! Ваш уровень: ${cefr} (-${formatMoney(course.price, state.currency)}).`,
+        text: `[Языковые курсы] Вы прошли ступень курса «${course.langName}»! Ваш уровень: ${cefr} (-${formatMoney(effectivePrice, state.currency)}).`,
         starred: nextLvl >= 4,
         category: 'career',
       },
@@ -2103,6 +2677,9 @@ export function enrollInUniversityWithCriteria(
 
 // Sports Pharmacology & Steroids Cycle
 export function useSteroidCycle(state: PlayerState, cycle: SteroidCycleItem): PlayerState {
+  if (!getAgeGate('steroids', state.age).allowed) {
+    return state;
+  }
   if (state.money < cycle.price) return state;
 
   const nextStrength = clampStat(state.skills.strength + cycle.strengthGain);
@@ -2156,6 +2733,9 @@ export function useSteroidCycle(state: PlayerState, cycle: SteroidCycleItem): Pl
 
 // Bad Habits & Rehab Action
 export function performHabitAction(state: PlayerState, item: HabitActionItem): PlayerState {
+  if (!getAgeGate('habit', state.age).allowed) {
+    return state;
+  }
   if (state.money < item.price) return state;
 
   const nextHabits = { ...state.habits };
@@ -2203,6 +2783,16 @@ export function executeCrimeAction(
   state: PlayerState,
   crime: CrimeActionItem
 ): { nextState: PlayerState; success: boolean; summaryText: string } {
+  const isMinorCrime = crime.wantedGain <= 1 && crime.minPayout <= 1000;
+  const gate = getAgeGate(isMinorCrime ? 'minor_crime' : 'crime', state.age);
+  if (!gate.allowed) {
+    return {
+      nextState: state,
+      success: false,
+      summaryText: gate.reason,
+    };
+  }
+
   const skillBoost =
     Math.max(0, state.skills.strength - crime.requiredStrength) * 0.4 +
     Math.max(0, state.skills.intellect - crime.requiredIntellect) * 0.4;
@@ -2260,6 +2850,11 @@ export function executeBribeAction(
   state: PlayerState,
   bribe: BribeActionItem
 ): { nextState: PlayerState; summaryText: string } {
+  const gate = getAgeGate('bribe', state.age);
+  if (!gate.allowed) {
+    return { nextState: state, summaryText: gate.reason };
+  }
+
   if (bribe.direction === 'give') {
     if (state.money < bribe.costOrReward) {
       return { nextState: state, summaryText: 'Недостаточно наличных для взятки!' };
@@ -2299,6 +2894,8 @@ export function executeBribeAction(
     nextState: {
       ...state,
       money: state.money + reward,
+      shadowIncome: (state.shadowIncome || 0) + reward,
+      taxScrutiny: clampStat((state.taxScrutiny || 0) + 10),
       wantedLevel: nextWanted,
       bribesTakenCount: state.bribesTakenCount + 1,
       approvalRating: clampStat(state.approvalRating + bribe.approvalDelta),
@@ -2327,6 +2924,15 @@ export function playCasinoGame(
   gameType: CasinoGameType,
   betAmount: number
 ): { nextState: PlayerState; won: boolean; netDelta: number; summaryText: string } {
+  const gate = getAgeGate('casino', state.age);
+  if (!gate.allowed) {
+    return {
+      nextState: state,
+      won: false,
+      netDelta: 0,
+      summaryText: gate.reason,
+    };
+  }
   if (betAmount <= 0 || state.money < betAmount) {
     return {
       nextState: state,
@@ -2370,7 +2976,7 @@ export function playCasinoGame(
     money: state.money + netDelta,
     happiness: clampStat(state.happiness + (won ? 10 : -4)),
     casinoNetProfit: state.casinoNetProfit + netDelta,
-    shadowIncome: won ? (state.shadowIncome || 0) + netDelta : state.shadowIncome,
+    shadowIncome: won && netDelta >= 1000 ? (state.shadowIncome || 0) + netDelta : state.shadowIncome,
     taxScrutiny: won && netDelta >= 1000 ? clampStat((state.taxScrutiny || 0) + 5) : state.taxScrutiny,
     chronicle: [
       {
@@ -2396,6 +3002,9 @@ export function enjoyNightlifePackage(
   state: PlayerState,
   pkg: NightlifePackageItem
 ): PlayerState {
+  if (!getAgeGate('nightlife', state.age).allowed) {
+    return state;
+  }
   if (state.money < pkg.price) return state;
 
   return {
@@ -2429,6 +3038,17 @@ export function interactRomancePartner(
   partner: RomancePartner,
   action: 'start_dating' | 'romantic_date' | 'luxury_gift' | 'marry' | 'breakup'
 ): { nextState: PlayerState; summaryText: string } {
+  const baseGate = getAgeGate('romance', state.age);
+  if (!baseGate.allowed) {
+    return { nextState: state, summaryText: baseGate.reason };
+  }
+  if (action === 'luxury_gift' || action === 'marry') {
+    const adultGate = getAgeGate('romance_adult', state.age);
+    if (!adultGate.allowed) {
+      return { nextState: state, summaryText: adultGate.reason };
+    }
+  }
+
   if (action === 'breakup') {
     const summaryText = `Вы расстались с ${partner.name}. Начинается новый этап личной жизни.`;
     return {
@@ -2456,11 +3076,16 @@ export function interactRomancePartner(
     };
   }
 
+  const isTeen = state.age < 18;
   const cost =
     action === 'start_dating'
-      ? 100
+      ? isTeen
+        ? 20
+        : 100
       : action === 'romantic_date'
-      ? 240
+      ? isTeen
+        ? 40
+        : 240
       : action === 'luxury_gift'
       ? 1200
       : 4500;
@@ -2491,7 +3116,9 @@ export function interactRomancePartner(
     action === 'start_dating'
       ? `Вы познакомились и начали встречаться с ${partner.name} (${partner.profession})!`
       : action === 'romantic_date'
-      ? `Романтический ужин при свечах с ${partner.name}: любовь и доверие укрепились (${nextRel}/100)!`
+      ? isTeen
+        ? `Прогулка в парке и кино с ${partner.name}: симпатия и доверие укрепились (${nextRel}/100)!`
+        : `Романтический ужин при свечах с ${partner.name}: любовь и доверие укрепились (${nextRel}/100)!`
       : action === 'luxury_gift'
       ? `Вы подарили ${partner.name} ювелирное украшение Cartier! Восторг и страсть (${nextRel}/100)!`
       : `СВАДЬБА! Вы и ${partner.name} сыграли роскошную свадьбу! Теперь ваш семейный бюджет пополняется на +${formatMoney(partner.wealthBonusPerMonth, state.currency)}/мес.`;
@@ -2556,36 +3183,180 @@ export function generateOfflineNpcDialogue(
   happinessDelta: number;
 } {
   const npc = state.friends.find((f) => f.id === npcId) || state.friends[0];
+  const npcName = npc?.name || 'Друг';
   const bonuses = calculateActiveBonuses(state);
-  const lastMem = state.aiMemory.entries[0]?.actionTaken || state.storyArc;
-  const brandMention =
-    bonuses.equippedBrands.length > 0
-      ? ` Кстати, твой образ (${bonuses.equippedBrands[0].brand}) отлично смотрится!`
+  const latestEntry = state.aiMemory.entries[0];
+  const prevEntry = state.aiMemory.entries[1];
+  const lastMem = latestEntry
+    ? `${latestEntry.actionTaken} (${latestEntry.consequenceSummary})`
+    : state.storyArc;
+  const priorChatTurn = npc?.dialogueHistory
+    ? [...npc.dialogueHistory].reverse().find((t) => t.sender === 'player')
+    : undefined;
+  const chatMemoryPrefix = priorChatTurn
+    ? `Помню, как ты недавно говорил: «${priorChatTurn.text.slice(0, 48)}». `
+    : prevEntry
+    ? `Ещё с тех пор, как было «${prevEntry.actionTaken.slice(0, 45)}», я знал, что ты пойдёшь далеко! `
+    : '';
+  const wardrobeOrBrand =
+    bonuses.equippedSuit && state.age >= 18
+      ? ` Твой образ («${bonuses.equippedSuit.name}») внушает уважение!`
+      : bonuses.equippedBrands.length > 0 && state.age >= 10
+      ? ` Кстати, твой прикид (${bonuses.equippedBrands[0].brand}) выглядит топово!`
       : '';
 
   const lower = userMessageOrAction.toLowerCase();
-  if (lower.includes('уберэкс') || lower.includes('заброш') || lower.includes('рейд') || lower.includes('спорт')) {
+  const variantIdx =
+    Math.abs(
+      state.age * 11 +
+        state.dayOfMonth * 7 +
+        state.monthOfYear * 5 +
+        userMessageOrAction.length * 13 +
+        (npc?.relationship || 50) +
+        (npc?.dialogueHistory?.length || 0) * 17
+    ) % 3;
+
+  // Early childhood mode (Ages 0 - 5)
+  if (state.age <= 5) {
+    const childReplies = [
+      `${chatMemoryPrefix}Посмотри, какая классная игрушка! В г. ${state.city.name} сегодня отличная погода (${state.weather}), пойдём играть во двор вместе с родителями!`,
+      `${chatMemoryPrefix}Давай строить большую башню из кубиков! Твоя мама и папа говорят, что ты растёшь очень смышлёным (${state.age} лет, память ДО: «${lastMem}»).`,
+      `${chatMemoryPrefix}Ура! Давай бегать наперегонки на площадке в г. ${state.city.name}!`,
+    ];
     return {
-      reply: `Помню твоё недавнее дело («${lastMem}»)! Твоя физическая форма (Сила: ${state.skills.strength}) в ${state.currentYear} году позволяет нам брать любые высоты в г. ${state.city.name}.${brandMention}`,
-      moodReaction: 'С уважением жмёт руку',
+      reply: childReplies[variantIdx],
+      moodReaction: `Радостно смеётся (${npcName})`,
+      relationDelta: 7,
+      happinessDelta: 7,
+    };
+  }
+
+  // Topic 1: Sport, Gym, Muscles, Workout
+  if (
+    lower.includes('спорт') ||
+    lower.includes('зал') ||
+    lower.includes('тренир') ||
+    lower.includes('мышц') ||
+    lower.includes('кач') ||
+    lower.includes('турник')
+  ) {
+    const sportReplies = [
+      `${chatMemoryPrefix}Отличная идея, ${state.name}! С твоей Силой (${state.skills.strength}/100) и Мышцами (${state.skills.muscleMass}/100) мы сегодня побьём рабочий вес на жиме в г. ${state.city.name}!${wardrobeOrBrand}`,
+      `${chatMemoryPrefix}Я уже собрал спортивную сумку! Помню твой путь ДО («${lastMem}») — после такой тренировки рельеф и выносливость вырастут на глазах.`,
+      `${chatMemoryPrefix}Давай устроим жёсткое кардио и базу! В такую погоду (${state.weather}) спортзал в г. ${state.city.name} — лучшее место для прокачки.`,
+    ];
+    return {
+      reply: sportReplies[variantIdx],
+      moodReaction: 'Готов к тренировке 💪',
+      relationDelta: 8,
+      happinessDelta: 7,
+    };
+  }
+
+  // Topic 2: Urbex, Rooftops, Bunkers, Extreme
+  if (
+    lower.includes('уберэкс') ||
+    lower.includes('заброш') ||
+    lower.includes('рейд') ||
+    lower.includes('крыш') ||
+    lower.includes('бункер') ||
+    lower.includes('сталк')
+  ) {
+    if (state.age < 16) {
+      return {
+        reply: `${chatMemoryPrefix}Слушай, ${state.name}, серьёзные ночные вылазки на охраняемые объекты открываются с 16 лет! А пока (после «${lastMem}») давай прокачаем выносливость и поснимаем городские влоги в г. ${state.city.name}.`,
+        moodReaction: 'Советует подготовиться',
+        relationDelta: 5,
+        happinessDelta: 4,
+      };
+    }
+    const urbexReplies = [
+      `${chatMemoryPrefix}Фонари и экшн-камера заряжены! Помню твоё дело ДО («${lastMem}»). В г. ${state.city.name} сегодня ${state.weather} — идеальное прикрытие для нового рейда (навык Уберэкса: ${state.skills.urbex}, подписчиков: ${state.urbexSubscribers.toLocaleString('ru-RU')}).`,
+      `${chatMemoryPrefix}У меня есть схема закрытого объекта на окраине г. ${state.city.name}! Если снимем этот выпуск, твой блог взлетит в тренды.${wardrobeOrBrand}`,
+      `${chatMemoryPrefix}Охрана там строгая, но с твоей физподготовкой (Сила: ${state.skills.strength}) мы пройдём незаметно и снимем лучший материал сезона!`,
+    ];
+    return {
+      reply: urbexReplies[variantIdx],
+      moodReaction: 'Проверяет снаряжение 🔦',
+      relationDelta: 9,
+      happinessDelta: 7,
+    };
+  }
+
+  // Topic 3: Investments, Money, Business, Finance
+  if (
+    lower.includes('инвест') ||
+    lower.includes('деньг') ||
+    lower.includes('бизнес') ||
+    lower.includes('акци') ||
+    lower.includes('капитал') ||
+    lower.includes('заработ')
+  ) {
+    const finReplies = [
+      `${chatMemoryPrefix}Сейчас у тебя на счету ${formatMoney(state.money, state.currency)}, а навык Финансов — ${state.skills.finance}/100. Помню твои решения ДО («${lastMem}»): в г. ${state.city.name} выгодно комбинировать дивидендные фонды и открытие собственной франшизы!`,
+      `${chatMemoryPrefix}Учитывая твой путь («${lastMem}») и ежемесячные счета (${formatMoney(state.monthlyExpenses.total, state.currency)}/мес), советую держать финансовую подушку и реинвестировать прибыль бизнеса.`,
+      `${chatMemoryPrefix}Помню твои шаги ДО («${lastMem}»): в ${state.currentYear} году в г. ${state.city.name} быстрее всего растут IT-активы и коммерческая недвижимость. Главное — следи за вниманием налоговой (${state.taxScrutiny || 0}%)!`,
+    ];
+    return {
+      reply: finReplies[variantIdx],
+      moodReaction: 'Делится финансовой стратегией 📈',
+      relationDelta: 7,
+      happinessDelta: 5,
+    };
+  }
+
+  // Topic 4: School, University, Exams, Languages
+  if (
+    lower.includes('школ') ||
+    lower.includes('вуз') ||
+    lower.includes('учеб') ||
+    lower.includes('универ') ||
+    lower.includes('экзам') ||
+    lower.includes('язык')
+  ) {
+    const eduReplies = [
+      `${chatMemoryPrefix}Твой средний балл аттестата — ${state.schoolGradeAvg.toFixed(1)}/12, а Интеллект — ${state.skills.intellect}/100! Помню, что было ДО («${lastMem}»): если подтянуть иностранный язык до B2/C1, ты легко поступишь на грант в Топ-10 ВУЗов Европы или Украины.`,
+      `${chatMemoryPrefix}Помню твои успехи («${lastMem}»). В г. ${state.city.name} диплом престижного факультета открывает доступ к самым высокооплачиваемым профессиям!`,
+      `${chatMemoryPrefix}Давай вместе подготовимся к олимпиаде! Высокий аттестат сэкономит тысячи долларов на обучении в университете.`,
+    ];
+    return {
+      reply: eduReplies[variantIdx],
+      moodReaction: 'Поддерживает в учёбе 🎓',
       relationDelta: 8,
       happinessDelta: 6,
     };
   }
-  if (lower.includes('инвест') || lower.includes('деньг') || lower.includes('бизнес') || lower.includes('вуз') || lower.includes('учеб')) {
+
+  // Topic 5: Career, Work, Politics
+  if (
+    lower.includes('работ') ||
+    lower.includes('карьер') ||
+    lower.includes('зарплат') ||
+    lower.includes('полит') ||
+    lower.includes('выбор')
+  ) {
+    const careerTitle =
+      CAREERS_CATALOG.find((c) => c.id === state.currentCareerId)?.title || 'поиск призвания';
     return {
-      reply: `С твоим школьным баллом (${state.schoolGradeAvg.toFixed(1)}/12) и опытом («${lastMem}») в г. ${state.city.name} открыты лучшие дороги! Следи за ежемесячными счетами (${formatMoney(state.monthlyExpenses.total, state.currency)}/мес).`,
-      moodReaction: 'Деловито кивает',
-      relationDelta: 6,
-      happinessDelta: 4,
+      reply: `${chatMemoryPrefix}Твоя текущая сфера (${careerTitle}) и опыт ДО («${lastMem}») в г. ${state.city.name} дают отличную базу! Выполняй спецдействия смены и собирай мощный ПК, чтобы поднять множитель дохода.${wardrobeOrBrand}`,
+      moodReaction: 'Уважает ваш профессионализм 💼',
+      relationDelta: 7,
+      happinessDelta: 6,
     };
   }
 
+  // Topic 6: Romance, Family, Life, Default
+  const generalReplies = [
+    `${chatMemoryPrefix}Рад тебя слышать, ${state.name}! Я хорошо помню, через что мы прошли ДО («${lastMem}»). В ${state.currentYear} году в г. ${state.city.name} (${state.season}, ${state.weather}) у нас впереди ещё больше крутых историй!${wardrobeOrBrand}`,
+    `${chatMemoryPrefix}Ты отлично держишься, ${state.name}! Текущая глава твоей жизни («${state.storyArc}») и прошлые шаги («${lastMem}») вдохновляют всех наших друзей в г. ${state.city.name}.`,
+    `${chatMemoryPrefix}В г. ${state.city.name} сегодня ${state.weather}, но с таким другом, как ты (${state.age} лет, Харизма ${state.skills.charisma}/100), любое дело по плечу! Помню твой выбор ДО: «${lastMem}».`,
+  ];
+
   return {
-    reply: `Рад тебя слышать, ${state.name}! Я помню всё, через что мы прошли («${lastMem}»). В ${state.currentYear} году в г. ${state.city.name} у нас впереди ещё больше побед!${brandMention}`,
-    moodReaction: `Помнит вашу историю (${npc?.name || 'Друг'})`,
-    relationDelta: 6,
-    happinessDelta: 5,
+    reply: generalReplies[variantIdx],
+    moodReaction: `Помнит вашу биографию и диалоги (${npcName})`,
+    relationDelta: 7,
+    happinessDelta: 6,
   };
 }
 
@@ -2674,19 +3445,25 @@ export function getAgeGate(action: string, age: number): AgeGateInfo {
     'bicycle_buy':      { minAge: 6,  reason: 'Велосипед доступен с 6 лет' },
     'crime':            { minAge: 18, reason: 'Криминал — строго с 18 лет!' },
     'minor_crime':      { minAge: 16, reason: 'Мелкие правонарушения — с 16 лет' },
+    'bribe':            { minAge: 18, reason: 'Взятки и откаты — с 18 лет!' },
     'casino':           { minAge: 18, reason: 'Казино 777 — строго с 18 лет!' },
     'steroids':         { minAge: 18, reason: 'Стероиды — только с 18 лет!' },
+    'habit':            { minAge: 14, reason: 'Вредные привычки и тусовки — с 14 лет' },
     'nightlife':        { minAge: 18, reason: 'Клуб 18+ — только совершеннолетним' },
     'romance':          { minAge: 12, reason: 'Первая симпатия открывается с 12 лет' },
     'romance_adult':    { minAge: 18, reason: 'Взрослые свидания и брак — с 18 лет' },
     'urbex':            { minAge: 16, reason: 'Экстрим и Уберэкс доступны с 16 лет' },
     'hobby_basic':      { minAge: 6,  reason: 'Хобби и секции доступны с 6 лет' },
     'hobby_extreme':    { minAge: 16, reason: 'Экстремальные хобби доступны с 16 лет' },
+    'faction':          { minAge: 14, reason: 'Социальные круги и группировки доступны с 14 лет' },
     'language_course':  { minAge: 6,  reason: 'Языковые курсы доступны с 6 лет' },
     'tech_gadget':      { minAge: 12, reason: 'Гаджеты и смартфоны с 12 лет' },
     'pc_build':         { minAge: 12, reason: 'Сборка ПК доступна с 12 лет' },
     'pet_request':      { minAge: 4,  reason: 'Попросить питомца можно с 4 до 17 лет' },
     'blog_post':        { minAge: 12, reason: 'Блог и соцсети с 12 лет' },
+    'artist_concert':   { minAge: 10, reason: 'Концерты доступны с 10 лет' },
+    'artist_collab':    { minAge: 14, reason: 'Музыкальные фиты доступны с 14 лет' },
+    'relocate':         { minAge: 18, reason: 'Самостоятельный переезд — с 18 лет' },
   };
   const gate = gates[action];
   if (!gate) return { allowed: true, minAge: 0, reason: '' };
@@ -2954,6 +3731,10 @@ export function publishBlogPost(
   state: PlayerState,
   postTheme: 'urbex' | 'fitness' | 'lifestyle' | 'travel'
 ): { nextState: PlayerState; summaryText: string } {
+  const blogGate = getAgeGate('blog_post', state.age);
+  if (!blogGate.allowed) {
+    return { nextState: state, summaryText: blogGate.reason };
+  }
   if (!state.activeSmartphoneId) {
     return { nextState: state, summaryText: 'Для публикации постов в соцсетях необходим смартфон!' };
   }
@@ -3043,14 +3824,17 @@ export function launderMoney(
     return { nextState: state, summaryText: 'У вас нет теневых средств для отмывания.' };
   }
   const toLaunder = Math.min(amount, availableShadow);
-  const taxCommission = Math.round(toLaunder * 0.18); // 18% fee
+  const taxCommission = Math.round(toLaunder * 0.18); // 18% laundering commission
+  if (state.money < taxCommission) {
+    return { nextState: state, summaryText: `Недостаточно средств для оплаты комиссии за легализацию (${formatMoney(taxCommission, state.currency)})!` };
+  }
   const cleanProfit = toLaunder - taxCommission;
 
   const nextState: PlayerState = {
     ...state,
     shadowIncome: availableShadow - toLaunder,
     taxScrutiny: Math.max(0, (state.taxScrutiny || 0) - 25),
-    money: state.money + cleanProfit,
+    money: state.money - taxCommission,
     chronicle: [
       {
         id: `launder_${Date.now()}`,
@@ -3058,7 +3842,7 @@ export function launderMoney(
         year: state.currentYear,
         season: state.season,
         weather: state.weather,
-        text: `🏦 [Легализация капитала] Через бизнес-счета отмыто $${cleanProfit.toLocaleString('ru-RU')} теневых средств (комиссия $${taxCommission.toLocaleString('ru-RU')}). Внимание налоговой службы спало!`,
+        text: `🏦 [Легализация капитала] Через бизнес-счета легализовано ${formatMoney(cleanProfit, state.currency)} теневых средств (удержана комиссия 18%: -${formatMoney(taxCommission, state.currency)}). Внимание налоговой службы спало!`,
         starred: true,
         category: 'business',
       },
@@ -3068,7 +3852,7 @@ export function launderMoney(
 
   return {
     nextState,
-    summaryText: `Легализовано $${cleanProfit.toLocaleString('ru-RU')}. Внимание налоговой инспекции снизилось на 25%.`,
+    summaryText: `Легализовано ${formatMoney(cleanProfit, state.currency)} (комиссия -${formatMoney(taxCommission, state.currency)}). Внимание налоговой снизилось на 25%.`,
   };
 }
 
@@ -3109,5 +3893,1229 @@ export function takeVacation(
     summaryText: `Отпуск в ${targetResortCity.name} удался! Стресс снижен на 45 единиц, +Счастье и +Здоровье.`,
   };
 }
+
+// =================== SAVE NORMALIZATION & MIGRATION ===================
+
+export function normalizeLoadedPlayerState(raw: PlayerState): PlayerState {
+  const fallback = createInitialPlayerState(
+    raw?.city || CITIES_CATALOG[0],
+    raw?.appearance || CHARACTER_APPEARANCES[0],
+    raw?.name || CITIES_CATALOG[0].defaultNames[0],
+    raw?.birthYear || 2008,
+    raw?.birthMonth || 5,
+    raw?.birthDay || 15
+  );
+
+  const age = typeof raw?.age === 'number' && !Number.isNaN(raw.age) ? Math.max(0, raw.age) : 0;
+  const infantFocuses: LifeFocus[] = ['Раннее развитие', 'Активный малыш', 'Любимчик семьи'];
+  let focus: LifeFocus = raw?.focus || (age <= 5 ? 'Раннее развитие' : 'Учёба');
+  if (age <= 5 && !infantFocuses.includes(focus)) {
+    focus = 'Раннее развитие';
+  } else if (age >= 6 && infantFocuses.includes(focus)) {
+    focus = 'Учёба';
+  }
+
+  const merged: PlayerState = {
+    ...fallback,
+    ...raw,
+    age,
+    focus,
+    skills: {
+      ...fallback.skills,
+      ...(raw?.skills || {}),
+    },
+    habits: {
+      ...fallback.habits,
+      ...(raw?.habits || {}),
+    },
+    careerStats: {
+      ...fallback.careerStats,
+      ...(raw?.careerStats || {}),
+    },
+    aiMemory: {
+      ...fallback.aiMemory,
+      ...(raw?.aiMemory || {}),
+      entries: Array.isArray(raw?.aiMemory?.entries)
+        ? raw.aiMemory.entries.filter(
+            (e) =>
+              e &&
+              typeof e.actionTaken === 'string' &&
+              typeof e.consequenceSummary === 'string'
+          )
+        : fallback.aiMemory.entries,
+    },
+    languages: {
+      ...fallback.languages,
+      ...(raw?.languages || {}),
+    },
+    stress: typeof raw?.stress === 'number' ? clampStat(raw.stress) : 0,
+    shadowIncome: typeof raw?.shadowIncome === 'number' ? Math.max(0, raw.shadowIncome) : 0,
+    taxScrutiny: typeof raw?.taxScrutiny === 'number' ? clampStat(raw.taxScrutiny) : 0,
+    pocketMoneyPerMonth:
+      typeof raw?.pocketMoneyPerMonth === 'number' ? Math.max(0, raw.pocketMoneyPerMonth) : 0,
+    petRequestCooldown:
+      typeof raw?.petRequestCooldown === 'number' ? Math.max(0, raw.petRequestCooldown) : 0,
+    blogPostsCount: typeof raw?.blogPostsCount === 'number' ? Math.max(0, raw.blogPostsCount) : 0,
+    blogAdRevenue: typeof raw?.blogAdRevenue === 'number' ? Math.max(0, raw.blogAdRevenue) : 0,
+    outfitStyle: raw?.outfitStyle || 'casual',
+    hairstyleId: raw?.hairstyleId || raw?.appearance?.hairStyle || 'short',
+    facialHairId: raw?.facialHairId || 'none',
+    hasMask: false, // tactical mask free-toggle removed
+    ownedWardrobeIds: Array.isArray(raw?.ownedWardrobeIds) ? raw.ownedWardrobeIds : [],
+    equippedSuitId:
+      raw?.equippedSuitId && Array.isArray(raw?.ownedWardrobeIds) && raw.ownedWardrobeIds.includes(raw.equippedSuitId)
+        ? raw.equippedSuitId
+        : null,
+    equippedAccessoryId:
+      raw?.equippedAccessoryId && Array.isArray(raw?.ownedWardrobeIds) && raw.ownedWardrobeIds.includes(raw.equippedAccessoryId)
+        ? raw.equippedAccessoryId
+        : null,
+    equippedWatchId:
+      raw?.equippedWatchId && Array.isArray(raw?.ownedWardrobeIds) && raw.ownedWardrobeIds.includes(raw.equippedWatchId)
+        ? raw.equippedWatchId
+        : null,
+    equippedGlassesId:
+      raw?.equippedGlassesId && Array.isArray(raw?.ownedWardrobeIds) && raw.ownedWardrobeIds.includes(raw.equippedGlassesId)
+        ? raw.equippedGlassesId
+        : null,
+    militaryServiceActive: Boolean(raw?.militaryServiceActive),
+    frontlineActive: Boolean(raw?.frontlineActive),
+    activeIllnesses: Array.isArray(raw?.activeIllnesses) ? raw.activeIllnesses : [],
+    debtDelinquencyTurns:
+      typeof raw?.debtDelinquencyTurns === 'number' ? Math.max(0, raw.debtDelinquencyTurns) : 0,
+    offlineAiMode: raw?.offlineAiMode !== undefined ? Boolean(raw.offlineAiMode) : true,
+  };
+
+  merged.monthlyExpenses = calculateMonthlyExpenses(merged);
+  merged.quests = syncQuestsProgress(merged);
+  return merged;
+}
+
+// =================== WARDROBE STORE & AUTO-CONTEXT ENGINE ===================
+
+export function resolveCharacterAutoContext(state: PlayerState): {
+  contextMode: 'infant' | 'toddler' | 'school' | 'military' | 'adult';
+  contextLabel: string;
+  outfitCategory: 'infant' | 'toddler' | 'school' | 'military' | 'casual' | 'street' | 'sport' | 'business' | 'luxury';
+  suitColor: string;
+  tieColor: string;
+  handItem: 'none' | 'toy' | 'backpack' | 'rifle' | 'sport_bag' | 'briefcase' | 'dual_cases';
+  hasWatch: boolean;
+  hasGlasses: boolean;
+  hasHelmetAndVest: boolean;
+} {
+  // Rule 1 (Priority): Automatic Age & Military Context
+  if (state.age <= 2) {
+    return {
+      contextMode: 'infant',
+      contextLabel: '0–2 года: Младенец (детский комбинезон, без аксессуаров)',
+      outfitCategory: 'infant',
+      suitColor: '#7FA6C4',
+      tieColor: '#B84A39',
+      handItem: 'none',
+      hasWatch: false,
+      hasGlasses: false,
+      hasHelmetAndVest: false,
+    };
+  }
+  if (state.age <= 6) {
+    return {
+      contextMode: 'toddler',
+      contextLabel: '3–6 лет: Дошкольник (футболка и шорты, игрушка в руке)',
+      outfitCategory: 'toddler',
+      suitColor: '#D98A4E',
+      tieColor: '#B84A39',
+      handItem: 'toy',
+      hasWatch: false,
+      hasGlasses: false,
+      hasHelmetAndVest: false,
+    };
+  }
+  if (state.age <= 17) {
+    return {
+      contextMode: 'school',
+      contextLabel: '7–17 лет: Школьник (худи/рубашка, школьный рюкзак)',
+      outfitCategory: 'school',
+      suitColor: '#3B5B76',
+      tieColor: '#B84A39',
+      handItem: 'backpack',
+      hasWatch: false,
+      hasGlasses: Boolean(state.equippedGlassesId && state.ownedWardrobeIds?.includes(state.equippedGlassesId)),
+      hasHelmetAndVest: false,
+    };
+  }
+
+  const activeCareer = state.currentCareerId
+    ? CAREERS_CATALOG.find((c) => c.id === state.currentCareerId)
+    : null;
+  const isMilitaryCareer =
+    state.militaryServiceActive ||
+    (activeCareer &&
+      (activeCareer.title.toLowerCase().includes('военн') ||
+        activeCareer.title.toLowerCase().includes('офицер') ||
+        activeCareer.title.toLowerCase().includes('спецназ') ||
+        activeCareer.sector.toLowerCase().includes('армия')));
+
+  if (isMilitaryCareer) {
+    return {
+      contextMode: 'military',
+      contextLabel: 'Служба / На фронте: Военная форма, бронежилет, шлем и автомат в руках',
+      outfitCategory: 'military',
+      suitColor: '#4B5320',
+      tieColor: '#3A4018',
+      handItem: 'rifle',
+      hasWatch: true,
+      hasGlasses: false,
+      hasHelmetAndVest: true,
+    };
+  }
+
+  // Rule 2: Peaceful Adult Life (18+) — ONLY purchased & equipped items from Wardrobe Store!
+  const ownedSet = new Set(state.ownedWardrobeIds || []);
+  const equippedSuit =
+    state.equippedSuitId && ownedSet.has(state.equippedSuitId)
+      ? WARDROBE_CATALOG.find((w) => w.id === state.equippedSuitId) || null
+      : null;
+  const equippedAcc =
+    state.equippedAccessoryId && ownedSet.has(state.equippedAccessoryId)
+      ? WARDROBE_CATALOG.find((w) => w.id === state.equippedAccessoryId) || null
+      : null;
+  const hasWatch = Boolean(state.equippedWatchId && ownedSet.has(state.equippedWatchId));
+  const hasGlasses = Boolean(state.equippedGlassesId && ownedSet.has(state.equippedGlassesId));
+
+  const outfitCategory = equippedSuit ? equippedSuit.category : 'casual';
+  const suitColor = equippedSuit?.suitColor || state.appearance?.shirtColor || '#4A5568';
+  const tieColor = equippedSuit?.tieColor || '#B84A39';
+  const handItem = equippedAcc?.handItemType || 'none';
+
+  const suitName = equippedSuit ? equippedSuit.name : 'Базовая повседневная одежда';
+  const accName = equippedAcc ? ` + ${equippedAcc.name}` : ' (руки свободны)';
+
+  return {
+    contextMode: 'adult',
+    contextLabel: `Гардероб (18+): ${suitName}${accName}`,
+    outfitCategory,
+    suitColor,
+    tieColor,
+    handItem,
+    hasWatch,
+    hasGlasses,
+    hasHelmetAndVest: false,
+  };
+}
+
+export function buyOrEquipWardrobeItem(
+  state: PlayerState,
+  item: WardrobeItem
+): { nextState: PlayerState; message: string } {
+  if (state.age < item.minAge) {
+    return {
+      nextState: state,
+      message: `Этот предмет гардероба доступен с ${item.minAge} лет!`,
+    };
+  }
+
+  if (state.militaryServiceActive) {
+    return {
+      nextState: state,
+      message: 'Во время военной службы действует уставная форма (бронежилет и автомат). Демобилизуйтесь для смены гражданского гардероба!',
+    };
+  }
+
+  const ownedIds = state.ownedWardrobeIds || [];
+  const isOwned = ownedIds.includes(item.id);
+
+  // If already owned, toggle equip/unequip in its slot
+  if (isOwned) {
+    const nextState: PlayerState = { ...state };
+    if (item.slot === 'suit') {
+      const unequip = state.equippedSuitId === item.id;
+      nextState.equippedSuitId = unequip ? null : item.id;
+      nextState.outfitStyle = unequip ? 'casual' : item.category;
+      return {
+        nextState,
+        message: unequip ? `Снято: «${item.name}»` : `Надето из гардероба: «${item.name}»`,
+      };
+    }
+    if (item.slot === 'hand_accessory') {
+      const unequip = state.equippedAccessoryId === item.id;
+      nextState.equippedAccessoryId = unequip ? null : item.id;
+      return {
+        nextState,
+        message: unequip ? `Убрано из рук: «${item.name}»` : `Взято в руки: «${item.name}»`,
+      };
+    }
+    if (item.slot === 'watch') {
+      const unequip = state.equippedWatchId === item.id;
+      nextState.equippedWatchId = unequip ? null : item.id;
+      return {
+        nextState,
+        message: unequip ? `Часы сняты: «${item.name}»` : `Надеты часы: «${item.name}»`,
+      };
+    }
+    if (item.slot === 'glasses') {
+      const unequip = state.equippedGlassesId === item.id;
+      nextState.equippedGlassesId = unequip ? null : item.id;
+      return {
+        nextState,
+        message: unequip ? `Очки сняты: «${item.name}»` : `Надеты очки: «${item.name}»`,
+      };
+    }
+  }
+
+  // Strict Rule: Cannot equip if not purchased! Must have enough money to buy.
+  if (state.money < item.price) {
+    return {
+      nextState: state,
+      message: `Недостаточно средств для покупки «${item.name}» (${formatMoney(item.price, state.currency)})! Некупленные вещи нельзя надеть.`,
+    };
+  }
+
+  const nextOwned = [...ownedIds, item.id];
+  const nextState: PlayerState = {
+    ...state,
+    money: state.money - item.price,
+    ownedWardrobeIds: nextOwned,
+    equippedSuitId: item.slot === 'suit' ? item.id : state.equippedSuitId,
+    equippedAccessoryId: item.slot === 'hand_accessory' ? item.id : state.equippedAccessoryId,
+    equippedWatchId: item.slot === 'watch' ? item.id : state.equippedWatchId,
+    equippedGlassesId: item.slot === 'glasses' ? item.id : state.equippedGlassesId,
+    outfitStyle: item.slot === 'suit' ? item.category : state.outfitStyle,
+    skills: {
+      ...state.skills,
+      charisma: clampStat(state.skills.charisma + item.charismaBonus),
+      finance: clampStat(state.skills.finance + item.financeBonus),
+      strength: clampStat(state.skills.strength + item.strengthBonus),
+    },
+    happiness: clampStat(state.happiness + 4),
+    chronicle: [
+      {
+        id: `wardrobe_${Date.now()}`,
+        age: state.age,
+        year: state.currentYear,
+        season: state.season,
+        weather: state.weather,
+        text: `👔 [Гардероб и Аксессуары] Вы приобрели и надели «${item.name}» за ${formatMoney(item.price, state.currency)} (${item.bonusLabel}).`,
+        starred: true,
+        category: 'finance',
+      },
+      ...state.chronicle,
+    ],
+  };
+
+  nextState.quests = syncQuestsProgress(nextState);
+  return {
+    nextState,
+    message: `Куплено и надето: «${item.name}» (${item.bonusLabel})!`,
+  };
+}
+
+export function toggleMilitaryService(state: PlayerState): {
+  nextState: PlayerState;
+  message: string;
+} {
+  if (state.age < 18) {
+    return {
+      nextState: state,
+      message: 'Срочная служба и военный контракт доступны только с 18 лет!',
+    };
+  }
+  const nextActive = !state.militaryServiceActive;
+  const nextState: PlayerState = {
+    ...state,
+    militaryServiceActive: nextActive,
+    frontlineActive: nextActive ? Boolean(state.frontlineActive) : false,
+    skills: nextActive
+      ? {
+          ...state.skills,
+          strength: clampStat(state.skills.strength + 5),
+          fitness: clampStat(state.skills.fitness + 5),
+        }
+      : state.skills,
+    chronicle: [
+      {
+        id: `mil_${Date.now()}`,
+        age: state.age,
+        year: state.currentYear,
+        season: state.season,
+        weather: state.weather,
+        text: nextActive
+          ? `🪖 [Военная служба] Вы поступили на службу (база / учебная часть). Выдана уставная форма оливкового цвета, бронежилет, шлем и табельный автомат.`
+          : `🎖️ [Демобилизация] Вы завершили службу и вернулись к мирной гражданской жизни и своему гардеробу.`,
+        starred: true,
+        category: 'career',
+      },
+      ...state.chronicle,
+    ],
+  };
+
+  return {
+    nextState,
+    message: nextActive
+      ? 'Вы на военной службе: автоматически экипированы форма, бронежилет и автомат!'
+      : 'Вы демобилизовались и вернулись к гражданскому гардеробу.',
+  };
+}
+
+export function toggleFrontlineDeployment(state: PlayerState): {
+  nextState: PlayerState;
+  message: string;
+} {
+  if (state.age < 18) {
+    return {
+      nextState: state,
+      message: 'Отправка на передовую доступна только с 18 лет!',
+    };
+  }
+  const nextFrontline = !state.frontlineActive;
+  const nextState: PlayerState = {
+    ...state,
+    militaryServiceActive: true,
+    frontlineActive: nextFrontline,
+    chronicle: [
+      {
+        id: `frontline_${Date.now()}`,
+        age: state.age,
+        year: state.currentYear,
+        season: state.season,
+        weather: state.weather,
+        text: nextFrontline
+          ? `💥 [ПЕРЕДОВАЯ / БЛИНДАЖ] Ваше подразделение переброшено на первую линию! Боевые выплаты повышены до $2 400/мес, работают фронтовые сценарии.`
+          : `⛺ [Ротация на базу] Ваше подразделение выведено из блиндажей в расположение военной базы на переформирование.`,
+        starred: true,
+        category: 'career',
+      },
+      ...state.chronicle,
+    ],
+  };
+
+  return {
+    nextState,
+    message: nextFrontline
+      ? 'Вы на передовой (блиндаж и окопы): боевые выплаты и фронтовые события активны!'
+      : 'Ротация на военную базу (казарма и плац).',
+  };
+}
+
+/**
+ * Medical Clinic Treatment (Private Clinic vs Free Public Hospital)
+ * Health does not regenerate passively — players must treat illnesses & injuries here!
+ */
+export function treatIllnessOrInjury(
+  state: PlayerState,
+  mode: 'private_clinic' | 'public_hospital'
+): { nextState: PlayerState; message: string } {
+  const illnesses = Array.isArray(state.activeIllnesses) ? state.activeIllnesses : [];
+  if (state.health >= 98 && illnesses.length === 0 && !state.hasInjury) {
+    return {
+      nextState: state,
+      message: 'Вы полностью здоровы и не нуждаетесь в госпитализации!',
+    };
+  }
+
+  if (mode === 'private_clinic') {
+    const cost = Math.max(450, Math.round(950 * state.city.economyMultiplier));
+    if (state.money < cost) {
+      return {
+        nextState: state,
+        message: `Недостаточно средств для частной клиники (${formatMoney(cost, state.currency)})! Доступна бесплатная госбольница.`,
+      };
+    }
+
+    const nextState: PlayerState = {
+      ...state,
+      money: state.money - cost,
+      health: clampStat(state.health + 30),
+      stress: clampStat((state.stress || 0) - 22),
+      hasInjury: false,
+      injuryTurnsLeft: 0,
+      activeIllnesses: [],
+      chronicle: [
+        {
+          id: `clinic_priv_${Date.now()}`,
+          age: state.age,
+          year: state.currentYear,
+          season: state.season,
+          weather: state.weather,
+          text: `🏥 [Частная клиника — ${formatMoney(cost, state.currency)}] Пройдена комплексная терапия и реабилитация! Все травмы и болезни полностью вылечены (+30 Здоровье, -22 Стресс).`,
+          starred: true,
+          category: 'life',
+        },
+        ...state.chronicle,
+      ],
+    };
+    return {
+      nextState,
+      message: `Частная клиника: полное исцеление всех недугов (+30 Здоровье, -22 Стресс)!`,
+    };
+  }
+
+  // Free Public Hospital (Бесплатная медицина: долго и с 30% риском осложнений)
+  const roll = Math.abs(state.age * 19 + state.dayOfMonth * 7 + state.chronicle.length * 13) % 100;
+  const hasComplication = roll < 30;
+
+  if (hasComplication) {
+    const nextIllnesses = illnesses.includes('Врачебное осложнение после госбольницы')
+      ? illnesses
+      : [...illnesses, 'Врачебное осложнение после госбольницы'];
+    const nextState: PlayerState = {
+      ...state,
+      health: clampStat(state.health - 5),
+      stress: clampStat((state.stress || 0) + 12),
+      activeIllnesses: nextIllnesses,
+      chronicle: [
+        {
+          id: `clinic_pub_fail_${Date.now()}`,
+          age: state.age,
+          year: state.currentYear,
+          season: state.season,
+          weather: state.weather,
+          text: `🚑 [Бесплатная госбольница] Очереди в коридоре и халатность привели к осложнению (-5 Здоровье, +12 Стресс)! Рекомендуется частная клиника.`,
+          starred: true,
+          category: 'life',
+        },
+        ...state.chronicle,
+      ],
+    };
+    return {
+      nextState,
+      message: 'Осложнение в бесплатной больнице (-5 Здоровье, +12 Стресс)!',
+    };
+  }
+
+  const remainingIllnesses = illnesses.slice(1);
+  const nextState: PlayerState = {
+    ...state,
+    health: clampStat(state.health + 12),
+    stress: clampStat((state.stress || 0) + 4),
+    hasInjury: remainingIllnesses.length > 0,
+    injuryTurnsLeft: remainingIllnesses.length > 0 ? 1 : 0,
+    activeIllnesses: remainingIllnesses,
+    chronicle: [
+      {
+        id: `clinic_pub_ok_${Date.now()}`,
+        age: state.age,
+        year: state.currentYear,
+        season: state.season,
+        weather: state.weather,
+        text: `🩺 [Бесплатная поликлиника] После долгой очереди врачи оказали базовую помощь (+12 Здоровье).`,
+        starred: false,
+        category: 'life',
+      },
+      ...state.chronicle,
+    ],
+  };
+  return {
+    nextState,
+    message: 'Бесплатная поликлиника: +12 Здоровье (снят 1 острый недуг).',
+  };
+}
+
+/**
+ * Block 3: Dynamic Contextual Background Location Resolver
+ */
+export function resolveCharacterLocationScene(state: PlayerState): {
+  locationId: BackgroundLocationId;
+  locationTitle: string;
+  locationSubtitle: string;
+} {
+  const activeCareer = state.currentCareerId
+    ? CAREERS_CATALOG.find((c) => c.id === state.currentCareerId) || null
+    : null;
+
+  // 1. Frontline Dugout / Trench
+  if (state.militaryServiceActive && state.frontlineActive) {
+    return {
+      locationId: 'frontline_dugout',
+      locationTitle: '🪖 Передовая / Укреплённый блиндаж',
+      locationSubtitle: 'Брёвна в 3 наката, масксеть, ящики БК и полевая рация',
+    };
+  }
+
+  // 2. Military Base / Barracks
+  if (
+    state.militaryServiceActive ||
+    (activeCareer &&
+      (activeCareer.title.toLowerCase().includes('военн') ||
+        activeCareer.title.toLowerCase().includes('офицер') ||
+        activeCareer.title.toLowerCase().includes('спецназ')))
+  ) {
+    return {
+      locationId: 'military_base',
+      locationTitle: '🪖 Военная база / Казарма и плац',
+      locationSubtitle: 'Армейские палатки, периметр с вышкой и военный грузовик',
+    };
+  }
+
+  // 3. Childhood & Teen Bedroom in Parents' Home (0–17 years)
+  if (state.age <= 17) {
+    return {
+      locationId: 'parents_room',
+      locationTitle: '🏠 Дом родителей / Детская спальня',
+      locationSubtitle: `Окно с видом на сезон (${state.season}), шкаф и уютная кровать`,
+    };
+  }
+
+  // 4. CEO Office / Business Center (Business owners, executives, politicians, or luxury real estate)
+  if (
+    state.ownedBusinesses.length > 0 ||
+    state.politicalPositionId ||
+    state.focus === 'Бизнес и Политика' ||
+    (activeCareer && activeCareer.category === 'finance_exec')
+  ) {
+    return {
+      locationId: 'ceo_office',
+      locationTitle: '🏢 Бизнес-центр / Кабинет CEO',
+      locationSubtitle: 'Панорамное окно на мегаполис, кожаное кресло и графики роста',
+    };
+  }
+
+  // 5. IT Office / Home Blogger Studio
+  if (
+    state.focus === 'Медиа и Музыка' ||
+    state.focus === 'Уберэкс' ||
+    state.urbexSubscribers >= 800 ||
+    (state.blogPostsCount || 0) >= 2 ||
+    Boolean(state.customPcBuild.cpu || state.customPcBuild.gpu) ||
+    (activeCareer &&
+      (activeCareer.category === 'tech_engineering' || activeCareer.category === 'creative_media'))
+  ) {
+    return {
+      locationId: 'it_blogger_studio',
+      locationTitle: '💻 IT-офис / Студия блогера',
+      locationSubtitle: 'Широкий стол, 3 монитора с кодом/графиками, микрофон и софтбокс',
+    };
+  }
+
+  // 6. Default Adult / Student Dorm / Rented Room
+  return {
+    locationId: 'student_dorm',
+    locationTitle: '🛏️ Студенческая общага / Съёмная комната',
+    locationSubtitle: 'Кровать, стол с горой конспектов, ноутбук и коробка лапши',
+  };
+}
+
+/**
+ * ============================================================================
+ * 1. HARDCORE STAT PROGRESSION (DIMINISHING RETURNS) & PEAK STAT DECAY (85-100)
+ * ============================================================================
+ * - Level 0–35: grants +1.5..+2.0 (1.8) and 1.0x Energy cost
+ * - Level 35–65: grants +0.7..+1.0 (0.85) and +30% Energy cost (1.3x)
+ * - Level 65–85: grants +0.2..+0.4 (0.3) if player has supplements/tutor/gear, else +0.1
+ * - Level 85–100: peak form, grants +0.1, and decays -1/month without active maintenance
+ */
+export function calculateDiminishingStatGain(
+  currentLevel: number,
+  hasBoostEquipOrSupplement: boolean
+): {
+  statGain: number;
+  energyCostMultiplier: number;
+  tierLabel: string;
+  requiresGearWarning: boolean;
+} {
+  if (currentLevel < 35) {
+    return {
+      statGain: 1.8,
+      energyCostMultiplier: 1.0,
+      tierLabel: 'База (0–35): быстрый прогресс (+1.8)',
+      requiresGearWarning: false,
+    };
+  }
+  if (currentLevel < 65) {
+    return {
+      statGain: 0.85,
+      energyCostMultiplier: 1.3,
+      tierLabel: 'Средний уровень (35–65): замедление (+0.85, +30% расход сил)',
+      requiresGearWarning: false,
+    };
+  }
+  if (currentLevel < 85) {
+    if (!hasBoostEquipOrSupplement) {
+      return {
+        statGain: 0.1,
+        energyCostMultiplier: 1.45,
+        tierLabel: 'Профи (65–85): плато без спортпита/репетитора/оборудования (+0.1)',
+        requiresGearWarning: true,
+      };
+    }
+    return {
+      statGain: 0.3,
+      energyCostMultiplier: 1.4,
+      tierLabel: 'Профи (65–85): спецподготовка со снаряжением (+0.3)',
+      requiresGearWarning: false,
+    };
+  }
+  return {
+    statGain: 0.1,
+    energyCostMultiplier: 1.5,
+    tierLabel: 'Пик формы (85–100): предел генетики (+0.1, без поддержки -1/мес)',
+    requiresGearWarning: false,
+  };
+}
+
+export function executeScaledStatTraining(
+  state: PlayerState,
+  skillKey: keyof PlayerState['skills'],
+  actionLabel: string
+): {
+  nextState: PlayerState;
+  gained: number;
+  energyCost: number;
+  tierLabel: string;
+  message: string;
+} {
+  const currentVal = state.skills[skillKey] || 0;
+  const hasBoost = Boolean(
+    state.steroidCyclesUsed > 0 ||
+      state.activeHobbyIds.length > 0 ||
+      state.ownedWardrobeIds.length > 1 ||
+      state.activeLaptopId ||
+      state.customPcBuild.cpu
+  );
+
+  const calc = calculateDiminishingStatGain(currentVal, hasBoost);
+  const baseEnergyCost = 10;
+  const energyCost = Math.round(baseEnergyCost * calc.energyCostMultiplier);
+  const currentEnergy = Math.max(0, 100 - (state.stress || 0));
+
+  if (currentEnergy < energyCost) {
+    return {
+      nextState: state,
+      gained: 0,
+      energyCost,
+      tierLabel: calc.tierLabel,
+      message: `⚡ Недостаточно Бодрости (${currentEnergy}% < ${energyCost}%)! Снизьте стресс или отдохните.`,
+    };
+  }
+
+  const nextVal = Math.min(100, Number((currentVal + calc.statGain).toFixed(1)));
+  const nextSkills = {
+    ...state.skills,
+    [skillKey]: nextVal,
+  };
+  if (skillKey === 'strength') {
+    nextSkills.muscleMass = Math.min(100, Number((state.skills.muscleMass + calc.statGain * 0.8).toFixed(1)));
+  }
+
+  const nextStress = clampStat((state.stress || 0) + energyCost);
+  const warnText = calc.requiresGearWarning
+    ? ' ⚠️ На уровне 65+ без спортпита/репетитора/оборудования прогресс почти остановился!'
+    : '';
+
+  const nextState: PlayerState = {
+    ...state,
+    skills: nextSkills,
+    stress: nextStress,
+    chronicle: [
+      {
+        id: `train_scale_${Date.now()}`,
+        age: state.age,
+        year: state.currentYear,
+        season: state.season,
+        weather: state.weather,
+        text: `🏋️ [${actionLabel}] +${calc.statGain} к навыку (текущий ур. ${nextVal}/100 · расход сил -${energyCost}% Бодрости). ${calc.tierLabel}.${warnText}`,
+        starred: false,
+        category: 'life',
+      },
+      ...state.chronicle,
+    ],
+  };
+
+  return {
+    nextState,
+    gained: calc.statGain,
+    energyCost,
+    tierLabel: calc.tierLabel,
+    message: `${actionLabel}: +${calc.statGain} (ур. ${nextVal}) · -${energyCost}% Бодрости.${warnText}`,
+  };
+}
+
+export function applyPeakStatDecay(
+  state: PlayerState,
+  maintainedSkills: Array<keyof PlayerState['skills']> = []
+): PlayerState {
+  const maintainedSet = new Set(maintainedSkills);
+  const nextSkills = { ...state.skills };
+  const keys = Object.keys(nextSkills) as Array<keyof PlayerState['skills']>;
+
+  for (const k of keys) {
+    if (nextSkills[k] >= 85 && !maintainedSet.has(k)) {
+      nextSkills[k] = Math.max(84, Number((nextSkills[k] - 1).toFixed(1)));
+    }
+  }
+  return {
+    ...state,
+    skills: nextSkills,
+  };
+}
+
+/**
+ * ============================================================================
+ * 2. GRADE-DEPENDENT PROFESSION MINI-GAMES (IT, BLOGGING, BUSINESS)
+ * ============================================================================
+ */
+export function resolveGradeProfessionMinigame(
+  state: PlayerState,
+  domain: 'it' | 'blog' | 'business',
+  tierTitle: string,
+  won: boolean,
+  scoreMultiplier = 1.0
+): {
+  nextState: PlayerState;
+  rewardMoney: number;
+  message: string;
+} {
+  if (!won) {
+    const nextState: PlayerState = {
+      ...state,
+      stress: clampStat((state.stress || 0) + 8),
+      careerStats: {
+        ...state.careerStats,
+        currentCombo: 0,
+      },
+    };
+    return {
+      nextState,
+      rewardMoney: 0,
+      message: `✕ Задача «${tierTitle}» провалена (+8% Стресс). Попробуйте снова!`,
+    };
+  }
+
+  const baseReward =
+    domain === 'it'
+      ? state.skills.intellect >= 65
+        ? 2400
+        : state.skills.intellect >= 38
+        ? 1350
+        : 650
+      : domain === 'blog'
+      ? state.urbexSubscribers >= 100000
+        ? 3200
+        : state.urbexSubscribers >= 10000
+        ? 1500
+        : 550
+      : state.ownedBusinesses.length >= 2
+      ? 3500
+      : 1250;
+
+  const rewardMoney = Math.round(baseReward * state.city.economyMultiplier * scoreMultiplier);
+  const primarySkill: keyof PlayerState['skills'] =
+    domain === 'it' ? 'intellect' : domain === 'blog' ? 'creativity' : 'finance';
+
+  const scaled = calculateDiminishingStatGain(state.skills[primarySkill], true);
+  const nextSkillVal = Math.min(100, Number((state.skills[primarySkill] + scaled.statGain).toFixed(1)));
+  const followersDelta =
+    domain === 'blog'
+      ? state.urbexSubscribers >= 100000
+        ? 4500
+        : state.urbexSubscribers >= 10000
+        ? 1600
+        : 650
+      : 0;
+
+  const nextState: PlayerState = {
+    ...state,
+    money: state.money + rewardMoney,
+    urbexSubscribers: state.urbexSubscribers + followersDelta,
+    happiness: clampStat(state.happiness + 6),
+    skills: {
+      ...state.skills,
+      [primarySkill]: nextSkillVal,
+    },
+    careerStats: {
+      ...state.careerStats,
+      kpiScore: clampStat(state.careerStats.kpiScore + 8),
+      miniGamesWon: state.careerStats.miniGamesWon + 1,
+      currentCombo: state.careerStats.currentCombo + 1,
+    },
+    chronicle: [
+      {
+        id: `grade_mg_${Date.now()}`,
+        age: state.age,
+        year: state.currentYear,
+        season: state.season,
+        weather: state.weather,
+        text: `🕹️ [Проф-задача · ${tierTitle}] Блестящее решение! Премия: +${formatMoney(rewardMoney, state.currency)}, KPI +8%, навык +${scaled.statGain}${followersDelta > 0 ? `, +${followersDelta} подписчиков` : ''}.`,
+        starred: true,
+        category: 'career',
+      },
+      ...state.chronicle,
+    ],
+  };
+
+  return {
+    nextState,
+    rewardMoney,
+    message: `✓ «${tierTitle}» выполнена! +${formatMoney(rewardMoney, state.currency)}, KPI +8%${followersDelta > 0 ? `, +${followersDelta} сабов` : ''}!`,
+  };
+}
+
+/**
+ * ============================================================================
+ * 3. PROACTIVE MULTI-STEP INCOMING NPC MESSENGER CHATS (NPCs WRITE FIRST!)
+ * ============================================================================
+ */
+export const PROACTIVE_NPC_CHAT_CATALOG: ProactiveNpcChatThread[] = [
+  {
+    id: 'npc_chat_mom_food',
+    minAge: 0,
+    maxAge: 65,
+    senderName: 'Мама ❤️',
+    senderRole: 'Родные • Голосовое и чат',
+    avatar: '👩',
+    openingMessage:
+      'Сынок, привет! Ты хоть поел нормально сегодня или опять на бутербродах и энергетиках всухомятку? Как там учёба и дела вообще?',
+    branches: [
+      {
+        playerReply: '«Мам, всё супер, только что пообедал горячим! Как вы с папой?»',
+        npcFollowUp:
+          'Ой, ну слава богу! Мы с отцом нормально, я тут пирожков напекла и скинула тебе немного на карту, купи себе нормальных фруктов ❤️',
+        finalChoices: [
+          {
+            label: 'Поблагодарить маму и пообещать заехать на выходных (+Отношения, +Деньги, -Стресс)',
+            outcomeText: 'Мама растрогалась, перевела вам деньги на карту, а на душе стало тепло и спокойно.',
+            moneyDelta: 180,
+            relationsDelta: 8,
+            happinessDelta: 7,
+            stressDelta: -8,
+          },
+          {
+            label: 'Быстро ответить «Спасибо, мамуль, бегу по делам!» (+Деньги)',
+            outcomeText: 'Вы поблагодарили маму и побежали дальше решать свои задачи.',
+            moneyDelta: 180,
+            relationsDelta: 4,
+          },
+        ],
+      },
+      {
+        playerReply: '«Честно говоря, зашиваюсь по полной, вообще не до еды сейчас...»',
+        npcFollowUp:
+          'Так, ну-ка не вздумай мне там гробить желудок! Никакие дедлайны и экзамены не стоят здоровья. Сейчас же сходи нормально поешь!',
+        finalChoices: [
+          {
+            label: 'Послушаться маму и взять горячий комплексный обед (+Здоровье, -Стресс)',
+            outcomeText: 'Вы отложили дела на полчаса и плотно пообедали — силы и настроение сразу вернулись!',
+            healthDelta: 7,
+            stressDelta: -10,
+            relationsDelta: 6,
+          },
+          {
+            label: 'Отмахнуться: «Ладно-ладно, вечером поем» (+Стресс)',
+            outcomeText: 'Вы продолжили работать на голодный желудок, чувствуя растущую усталость.',
+            stressDelta: 6,
+            relationsDelta: -3,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'npc_chat_friend_gym',
+    minAge: 13,
+    maxAge: 42,
+    senderName: 'Димон (Кент) 🤜🤛',
+    senderRole: 'Лучший друг • В сети',
+    avatar: '🧔',
+    openingMessage:
+      'Бро, здарова! Чё киснешь дома? Го сегодня вечером в зал железо потягаем или катнем по ночному городу проветрить голову?',
+    branches: [
+      {
+        playerReply: '«Погнали в зал! Сделаем тяжёлую базу и обсудим дела»',
+        npcFollowUp:
+          'Красава! Я уже предтрен замешал, через полчаса жду у стойки для жима. Сегодня идём на рекордный рабочий вес! 💪',
+        finalChoices: [
+          {
+            label: 'Выложиться на жиме со страховкой кента (+Сила, +Отношения, +Счастье)',
+            outcomeText: 'Вы мощно потренировались с Димоном, взяли новый вес и зарядились бодростью!',
+            skillKey: 'strength',
+            skillDelta: 2,
+            relationsDelta: 8,
+            happinessDelta: 7,
+          },
+          {
+            label: 'Сделать лёгкий памп и посидеть в сауне (-Стресс, +Здоровье)',
+            outcomeText: 'Отличное восстановление после тяжёлой недели — мышцы в тонусе, голова свежая.',
+            healthDelta: 6,
+            stressDelta: -12,
+            relationsDelta: 6,
+          },
+        ],
+      },
+      {
+        playerReply: '«Го лучше катнем вечером по центру, возьмём кофе на заправке»',
+        npcFollowUp:
+          'Базару ноль! Заеду через 15 минут, включим музло и обсудим новые темки по бизнесу и крипте.',
+        finalChoices: [
+          {
+            label: 'Обсудить рабочие темки и кайфануть от ночного города (+Финансы, -Стресс)',
+            outcomeText: 'Ночная поездка с другом подарила пару дельных финансовых идей и сняла весь стресс.',
+            skillKey: 'finance',
+            skillDelta: 2,
+            happinessDelta: 8,
+            stressDelta: -10,
+            relationsDelta: 7,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'npc_chat_partner_attention',
+    minAge: 16,
+    maxAge: 55,
+    senderName: 'Любимая 💕',
+    senderRole: 'Отношения • Печатает...',
+    avatar: '👱‍♀️',
+    openingMessage:
+      'Слушай, это уже не смешно... Ты опять весь вечер уткнулся в свой монитор и код! Мы вообще проводим время вдвоём или ты женат на ноутбуке?! 😒',
+    branches: [
+      {
+        playerReply: '«Малыш, прости, реально заработался. Закрываю ноут — го в ресторан или закажем роллы!»',
+        npcFollowUp:
+          'Вот так бы сразу! 🥺 Ладно, только чур телефон на беззвучный, а то опять твой рабочий чат весь вечер пиликать будет.',
+        finalChoices: [
+          {
+            label: 'Устроить романтический ужин без гаджетов (+Отношения, +Счастье, -Стресс)',
+            outcomeText: 'Вы провели тёплый вечер вдвоём, полностью перезагрузившись от суеты.',
+            moneyDelta: -120,
+            relationsDelta: 11,
+            happinessDelta: 10,
+            stressDelta: -12,
+          },
+          {
+            label: 'Включить любимый сериал дома под пледом (+Отношения, -Стресс)',
+            outcomeText: 'Уютный домашний вечер вернул гармонию в ваши отношения.',
+            relationsDelta: 8,
+            happinessDelta: 7,
+            stressDelta: -8,
+          },
+        ],
+      },
+      {
+        playerReply: '«Блин, я же ради нашего будущего стараюсь, сейчас горящий дедлайн!»',
+        npcFollowUp:
+          'Я всё понимаю про деньги и амбиции, но мне нужен живой человек рядом, а не тень за клавиатурой...',
+        finalChoices: [
+          {
+            label: 'Пообещать железно освободить все выходные для неё (+Компромисс)',
+            outcomeText: 'Вы нашли компромисс, спокойно доделали задачу и сохранили мир в доме.',
+            skillKey: 'charisma',
+            skillDelta: 2,
+            relationsDelta: 4,
+            stressDelta: 4,
+          },
+          {
+            label: 'Дожать проект до утра любой ценой (+Деньги, -Отношения)',
+            outcomeText: 'Вы закрыли жирный заказ к утру, но между вами остался холодок.',
+            moneyDelta: 450,
+            relationsDelta: -8,
+            stressDelta: 10,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'npc_chat_boss_friday_prod',
+    minAge: 18,
+    maxAge: 65,
+    senderName: 'Тимлид / Босс 💼',
+    senderRole: 'Рабочий чат • СРОЧНО',
+    avatar: '👔',
+    openingMessage:
+      'Привет! Сорри что в пятницу вечером, но тут прод упал после вечернего релиза, транзакции висят 🚨 Глянешь сейчас? Оплачу в двойном размере!',
+    branches: [
+      {
+        playerReply: '«Уже открываю логи! Сейчас локализую баг и выкачу хотфикс за 20 минут»',
+        npcFollowUp:
+          'Вообще выручаешь! Скинул доступы к кластеру, бухгалтерия проведёт двойной бонус первым же платежом.',
+        finalChoices: [
+          {
+            label: 'Поднять прод и забрать двойную премию (+Деньги, +Интеллект)',
+            outcomeText: 'Вы за полчаса подняли упавший сервис и получили щедрую премию от руководства!',
+            moneyDelta: 850,
+            skillKey: 'intellect',
+            skillDelta: 2,
+            stressDelta: 8,
+          },
+          {
+            label: 'Потребовать кроме премии ещё и оплачиваемый отгул в понедельник (+Деньги, -Стресс)',
+            outcomeText: 'Босс с радостью согласился: вы и заработали, и выбили длинные выходные!',
+            moneyDelta: 650,
+            skillKey: 'charisma',
+            skillDelta: 2,
+            stressDelta: -4,
+          },
+        ],
+      },
+      {
+        playerReply: '«Извини, я сейчас не у компа, смогу посмотреть только утром»',
+        npcFollowUp:
+          'Понял... Придётся будить дежурного девопса. Ладно, в понедельник на созвоне обсудим.',
+        finalChoices: [
+          {
+            label: 'Спокойно отдыхать в свой законный вечер (-Стресс, +Счастье)',
+            outcomeText: 'Вы отстояли личные границы и отлично выспались без ночных авралов.',
+            stressDelta: -10,
+            happinessDelta: 6,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'npc_chat_classmate_exam',
+    minAge: 11,
+    maxAge: 23,
+    senderName: 'Макс (Одногруппник) 🎓',
+    senderRole: 'Чат потока • В сети',
+    avatar: '🧑‍🎓',
+    openingMessage:
+      'Йоу! У меня инсайд — слили билеты на завтрашнюю контрольную/зачёт, но там половина задач с подвохом. Залетай в дискорд, прорешаем вместе?',
+    branches: [
+      {
+        playerReply: '«Залетаю в голосовой! Сейчас разберём самые сложные билеты»',
+        npcFollowUp:
+          'Лучший! Я уже создал комнату и закинул фотки билетов. Если сейчас всё раскидаем — высший балл у нас в кармане!',
+        finalChoices: [
+          {
+            label: 'Разобрать все билеты до идеала (+Интеллект, +Отношения)',
+            outcomeText: 'Вы за пару часов разобрали все задачи и блестяще подготовились к сдаче!',
+            skillKey: 'intellect',
+            skillDelta: 2,
+            relationsDelta: 6,
+            happinessDelta: 5,
+          },
+        ],
+      },
+      {
+        playerReply: '«Да ну, я лучше высплюсь и на месте вывезу на импровизации»',
+        npcFollowUp:
+          'Ну ты рисковый чел конечно 😂 Ладно, ни пуха ни пера нам завтра с утра!',
+        finalChoices: [
+          {
+            label: 'Выспаться и сдать за счёт подвешенного языка (+Харизма, -Стресс)',
+            outcomeText: 'Вы отлично выспались и уверенно ответили на дополнительные вопросы преподавателя!',
+            skillKey: 'charisma',
+            skillDelta: 2,
+            stressDelta: -8,
+            happinessDelta: 6,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'npc_chat_commissar_summons',
+    minAge: 18,
+    maxAge: 50,
+    senderName: 'Военный комиссариат 🪖',
+    senderRole: 'Официальное оповещение • Реестр',
+    avatar: '🪖',
+    openingMessage:
+      'Уведомление: вам необходимо обновить военно-учётные данные и подтвердить актуальный статус (учёба / бронь / служба по контракту) в течение 7 дней.',
+    branches: [
+      {
+        playerReply: '«Отправить электронную выписку об учёбе / работе через кабинет»',
+        npcFollowUp:
+          'Документы успешно верифицированы в электронном реестре. Ваш учётный статус обновлён без замечаний.',
+        finalChoices: [
+          {
+            label: 'Сохранить выписку со штампом (+Спокойствие, -Стресс)',
+            outcomeText: 'Вы вовремя обновили документы в реестре и избавились от лишней бюрократии.',
+            stressDelta: -8,
+            happinessDelta: 4,
+          },
+        ],
+      },
+      {
+        playerReply: '«Поинтересоваться условиями контракта в профильном подразделении (связь / БПЛА)»',
+        npcFollowUp:
+          'Для специалистов с техническими навыками действуют повышенные подъёмные выплаты и приоритетное распределение.',
+        finalChoices: [
+          {
+            label: 'Пройти сборы резервистов с выплатой (+Деньги, +Сила)',
+            outcomeText: 'Вы прошли интенсивные тактические сборы, укрепили форму и получили выплату.',
+            moneyDelta: 950,
+            skillKey: 'strength',
+            skillDelta: 2,
+            stressDelta: 6,
+          },
+        ],
+      },
+    ],
+  },
+];
+
+export function pickProactiveNpcChat(state: PlayerState): ProactiveNpcChatThread {
+  const used = new Set(state.usedEventIds || []);
+  const eligible = PROACTIVE_NPC_CHAT_CATALOG.filter(
+    (t) => state.age >= t.minAge && state.age <= t.maxAge
+  );
+  const pool = eligible.length > 0 ? eligible : PROACTIVE_NPC_CHAT_CATALOG;
+  const fresh = pool.filter((t) => !used.has(t.id));
+  const candidates = fresh.length > 0 ? fresh : pool;
+  const seed = Math.abs(
+    state.age * 19 + state.currentYear * 11 + state.monthOfYear * 7 + state.chronicle.length * 5
+  );
+  return candidates[seed % candidates.length];
+}
+
+export function resolveProactiveNpcChatFinal(
+  state: PlayerState,
+  threadId: string,
+  branchIndex: number,
+  finalChoiceIndex: number
+): {
+  nextState: PlayerState;
+  message: string;
+} {
+  const thread =
+    PROACTIVE_NPC_CHAT_CATALOG.find((t) => t.id === threadId) || PROACTIVE_NPC_CHAT_CATALOG[0];
+  const branch = thread.branches[branchIndex] || thread.branches[0];
+  const choice = branch.finalChoices[finalChoiceIndex] || branch.finalChoices[0];
+
+  const nextSkills = { ...state.skills };
+  if (choice.skillKey && choice.skillDelta) {
+    const scaled = calculateDiminishingStatGain(nextSkills[choice.skillKey], true);
+    nextSkills[choice.skillKey] = Math.min(
+      100,
+      Number((nextSkills[choice.skillKey] + scaled.statGain).toFixed(1))
+    );
+  }
+
+  const nextState: PlayerState = {
+    ...state,
+    money: state.money + Math.round((choice.moneyDelta || 0) * state.city.economyMultiplier),
+    health: clampStat(state.health + (choice.healthDelta || 0)),
+    happiness: clampStat(state.happiness + (choice.happinessDelta || 0)),
+    relations: clampStat(state.relations + (choice.relationsDelta || 0)),
+    stress: clampStat((state.stress || 0) + (choice.stressDelta || 0)),
+    skills: nextSkills,
+    activeIncomingNpcChat: null,
+    aiMemory: appendAiMemory(state, `Чат с ${thread.senderName}: ${branch.playerReply}`, choice.outcomeText, 'social'),
+    chronicle: [
+      {
+        id: `npc_proactive_${Date.now()}`,
+        age: state.age,
+        year: state.currentYear,
+        season: state.season,
+        weather: state.weather,
+        text: `📲 [Входящий чат · ${thread.senderName}] ${choice.outcomeText}`,
+        starred: false,
+        category: 'family',
+      },
+      ...state.chronicle,
+    ],
+  };
+
+  return {
+    nextState,
+    message: `📲 ${thread.senderName}: ${choice.outcomeText}`,
+  };
+}
+
+
+
 
 
